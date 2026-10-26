@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>One in a Melon</title>
+  <meta name="description" content="Roll for food, from Bread to 1-in-a-billion legends. Eat for luck, cook secret recipes, find mutations and hunt for hidden secrets.">
+  <meta property="og:title" content="One in a Melon">
+  <meta property="og:description" content="Roll for food, from Bread to 1-in-a-billion legends. Eat for luck, cook secret recipes, find mutations and hunt for hidden secrets.">
+  <meta name="theme-color" content="#1d1724">
+  <link rel="icon" type="image/png" href="img/watermelon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <button id="logo" class="logo" title="A watermelon"><img class="fi" src="img/watermelon.png" alt="" draggable="false"></button>
+    <h1>One in a Melon</h1>
+    <!-- Halloween hunt: knock three times -->
+    <button id="hauntDoor" class="haunt-door" hidden title="A door">🚪</button>
+  </header>
+  <p id="eventBanner" class="event-banner" hidden></p>
+
+  <main>
+    <section class="panel">
+      <h2>Stats</h2>
+      <dl id="stats" class="stats"></dl>
+      <h2>Active buffs</h2>
+      <ul id="charges" class="buffs"></ul>
+      <!-- Food buffs fold away so a long list doesn't take over the panel -->
+      <details id="buffBox" class="buff-box" hidden>
+        <summary id="buffSummary"></summary>
+        <ul id="buffs" class="buffs"></ul>
+      </details>
+    </section>
+
+    <section class="stage">
+      <div id="card" class="card">
+        <div id="cardTier" class="card-tier">&nbsp;</div>
+        <div id="cardMut" class="card-mut"></div>
+        <div id="cardEmoji" class="card-emoji">🍽️</div>
+        <div id="cardName" class="card-name">Press Roll!</div>
+        <div id="cardOdds" class="card-odds">&nbsp;</div>
+        <div id="mutPop" class="mut-pop">MUTATION!</div>
+      </div>
+      <div id="luckyNote" class="lucky-note">&nbsp;</div>
+      <button id="rollBtn" class="roll-btn">Roll</button>
+      <div id="rollLuck" class="roll-luck">🍀 Luck x1.00</div>
+      <div class="toggles">
+        <label id="autoRollLabel" hidden><input type="checkbox" id="autoRoll"> Auto roll</label>
+        <label title="Eats whole stacks: picked foods (🍴 in your inventory) as soon as you get them, or everything in a tier range when its buff runs out">Auto eat
+          <select id="autoEat">
+            <option value="off">Off</option>
+            <option value="picked">Picked foods 🍴</option>
+            <option value="rare">Common to Rare</option>
+            <option value="epic">Up to Epic</option>
+            <option value="all">Everything</option>
+            <option value="odds">By odds (1 in X)</option>
+          </select>
+          <input type="number" id="autoEatOdds" min="1" step="1" placeholder="X" hidden title="Eats foods at 1 in X or more common">
+        </label>
+      </div>
+      <p class="hint" id="rollHint">Press R to roll</p>
+      <div id="recent" class="recent"></div>
+      <!-- Pirate hunt, last step: tap it ten times (or press X) -->
+      <button id="xSpot" class="x-spot" hidden title="X marks the spot">✖️</button>
+      <!-- Map hunt, last step: the torn map -->
+      <button id="mapSpot" class="x-spot" hidden title="A torn map">🗺️</button>
+      <!-- Comet hunt: a sparkle trail that runs off the right edge -->
+      <div id="cometTrail" class="comet-trail" hidden>
+        <div class="comet-track"><button id="cometEnd" class="comet-end" title="Something landed here">☄️</button></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="tabs">
+        <button data-tab="inv" class="active">Inventory</button>
+        <button data-tab="kitchen">Kitchen</button>
+        <button data-tab="recipes">Recipes</button>
+        <button data-tab="shop">Shop</button>
+        <button data-tab="daily" id="dailyTab">Daily</button>
+        <button data-tab="achievements">Achievements</button>
+        <button data-tab="index">Index</button>
+        <button data-tab="muts">Mutations</button>
+      </div>
+      <div id="tab-inv" class="tab active">
+        <!-- Outside the list, so re-rendering the list doesn't kick you out of the search box -->
+        <input id="invSearch" class="search" type="search" placeholder="Search your food..." autocomplete="off">
+        <div class="eat-bar">
+          <span>Eat all</span>
+          <select id="eatWhich">
+            <option value="common">Common</option>
+            <option value="uncommon">Uncommon</option>
+            <option value="rare">Rare</option>
+            <option value="epic">Epic</option>
+            <option value="legendary">Legendary</option>
+            <option value="mythic">Mythic</option>
+            <option value="divine">Divine</option>
+            <option value="eternal">Eternal</option>
+            <option value="meal">Meals</option>
+            <option value="odds">By odds (1 in X)</option>
+          </select>
+          <input id="eatOdds" type="number" min="1" step="1" placeholder="X" hidden>
+          <button id="eatAllBtn">Eat</button>
+        </div>
+        <div id="invList" class="tab-section"></div>
+      </div>
+      <div id="tab-kitchen" class="tab">
+        <div id="kitchenTop"></div>
+        <!-- Outside the list, so re-rendering the list doesn't kick you out of the search box -->
+        <input id="kitchenSearch" class="search" type="search" placeholder="Search for ingredients..." autocomplete="off">
+        <div id="kitchenList"></div>
+      </div>
+      <div id="tab-recipes" class="tab"></div>
+      <div id="tab-shop" class="tab">
+        <div id="shopTop"></div>
+        <h3 class="r-head">Sell</h3>
+        <!-- Outside the list, so re-rendering the list doesn't kick you out of the search box -->
+        <div class="sell-bar">
+          <input id="sellSearch" class="search" type="search" placeholder="Search your food..." autocomplete="off">
+          <select id="sellWhich">
+            <option value="can">Can sell</option>
+            <option value="cant">Can't sell</option>
+            <option value="all">Everything</option>
+          </select>
+        </div>
+        <div id="sellList"></div>
+      </div>
+      <div id="tab-daily" class="tab"></div>
+      <div id="tab-achievements" class="tab">
+        <h3 class="r-head">Achievements</h3>
+        <div id="achList" class="tab-section"></div>
+        <h3 class="r-head">Secrets</h3>
+        <div id="secretList" class="tab-section"></div>
+        <h3 class="r-head">📖 Clue journal</h3>
+        <div id="clueJournal" class="tab-section"></div>
+      </div>
+      <div id="tab-index" class="tab"></div>
+      <div id="tab-muts" class="tab"></div>
+    </section>
+  </main>
+
+  <footer>
+    <button id="profileBtn" hidden title="Switch profile">👤</button>
+    <button id="helpBtn">❓ How to play</button>
+    <button id="codesBtn">📜 Codes</button>
+    <button id="settingsBtn">⚙️ Settings</button>
+    <button id="resetBtn" class="danger">Reset save</button>
+    <!-- Phantom hunt: a seed that rolled out of the Codes book -->
+    <button id="phantomSeed" class="phantom-seed" hidden title="A seed">🌰</button>
+  </footer>
+
+  <!-- Mole hunt: a tunnel far below the page -->
+  <div id="tunnel" class="tunnel" hidden>
+    <button id="tunnelEnd" class="tunnel-end" title="A hole">🕳️</button>
+  </div>
+
+  <div id="helpModal" class="modal">
+    <div class="modal-box help-box">
+      <h2>❓ How to play</h2>
+      <div class="whats-new">
+        <b>🆕 What's new in v1.0</b>
+        <ul class="help-list">
+          <li><b>🎃 Halloween event</b> until Nov 2: spooky foods, a new mutation, two recipes and something knocking...</li>
+          <li><b>📅 Daily challenges</b>: three new goals every day for coins. Finish all three to build a streak.</li>
+          <li><b>👤 Profiles</b>: everyone on this browser gets their own save, with an optional password.</li>
+          <li><b>🪙 Shop search</b>: find what you can sell, and see why some things can't be sold.</li>
+          <li><b>✌️ Double mutations</b>: once in a while, food mutates twice.</li>
+          <li><b>🍀 Easier top tiers</b>: legendary, mythic, divine and eternal foods all show up more often.</li>
+        </ul>
+      </div>
+      <ul class="help-list">
+        <li><b>🎲 Roll</b> for food. Each food has odds like "1 in 80". Luck makes the rare ones show up more.</li>
+        <li><b>🍽️ Eat</b> food from your Inventory for buffs: more luck, faster rolls. The more buffs you stack, the less each extra one adds. ⭐ keeps a food safe, 🍴 picks it for auto eat, and "Eat all" eats a whole tier at once.</li>
+        <li><b>🧬 Mutations</b> can happen to any food. They make it stronger and rarer. Once in a while, food mutates twice.</li>
+        <li><b>🍲 Cook</b> in the Kitchen by mixing foods in the pot. Recipe scraps hint at what goes together.</li>
+        <li><b>🪙 Sell</b> food in the Shop. Bigger food sells for more. Spend coins on scraps, power-ups and upgrades.</li>
+        <li><b>📅 Daily</b> challenges change every day at midnight. Finish all three for a bonus that grows with your streak.</li>
+        <li><b>🏆 Achievements</b> pay coins. Secrets are hidden all over the game, and their hints are vague on purpose.</li>
+        <li><b>⚙️ Settings</b> has sound, cutscenes and a save backup.</li>
+      </ul>
+      <!-- Map hunt, piece 4 -->
+      <button id="helpPiece" class="map-piece" data-piece="4" hidden title="Something torn">🧩</button>
+      <div class="modal-buttons"><button type="button" id="helpClose" class="primary">Let's roll</button></div>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal">
+    <div class="modal-box">
+      <h2>⚙️ Settings</h2>
+      <div id="profileSetting" class="setting profile-setting" hidden>Profile
+        <span class="setting-note" id="profileNote"></span>
+        <div class="save-buttons">
+          <button type="button" id="switchProfile">Switch</button>
+          <button type="button" id="changePw">Password</button>
+          <button type="button" id="deleteProfile" class="danger">Delete</button>
+        </div>
+        <form id="pwForm" class="pw-form" hidden>
+          <span class="setting-note" id="pwMsg"></span>
+          <input type="password" id="pwOld" placeholder="Current password" autocomplete="current-password">
+          <input type="password" id="pwNew" placeholder="New password" autocomplete="new-password">
+          <input type="password" id="pwNew2" placeholder="New password again" autocomplete="new-password">
+          <div class="save-buttons">
+            <button type="submit" id="pwSubmit">Save password</button>
+            <button type="button" id="pwCancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+      <div class="setting-checks">
+        <label><input type="checkbox" id="soundOn"> Sound</label>
+        <label><input type="checkbox" id="musicOn"> Music</label>
+      </div>
+      <label class="setting">Luck limit x
+        <input type="number" id="luckCap" min="1" step="0.1" placeholder="max">
+        <span class="setting-note">Your luck never goes above this, so common foods can show up again. Leave empty for full luck.</span>
+      </label>
+      <label class="setting">Auto delete below 1 in
+        <input type="number" id="deleteBelow" min="0" step="1" placeholder="off">
+        <span class="setting-note">Foods more common than this are deleted straight away (favorites are kept). Leave empty to keep everything.</span>
+      </label>
+      <label class="setting">Play a cutscene for rolls of
+        <select id="cutsceneOdds">
+          <option value="10000">1 in 10,000 or rarer</option>
+          <option value="100000">1 in 100,000 or rarer</option>
+          <option value="300000">1 in 300,000 or rarer (default, every divine)</option>
+          <option value="1000000">1 in 1,000,000 or rarer</option>
+          <option value="10000000">1 in 10,000,000 or rarer</option>
+          <option value="100000000">1 in 100,000,000 or rarer</option>
+          <option value="1000000000">1 in 1,000,000,000 or rarer</option>
+          <option value="0">Never</option>
+        </select>
+      </label>
+      <p class="setting-note">Rare rolls without a cutscene still get a quick flash. Secrets always get their cutscene.</p>
+      <div class="setting">Save backup
+        <span class="setting-note">Your progress only lives in this browser. Export a backup code and keep it somewhere safe, or paste one here and press Import.</span>
+        <textarea id="saveCode" class="save-code" rows="3" spellcheck="false" placeholder="Backup code"></textarea>
+        <div class="save-buttons">
+          <button type="button" id="exportSave">Export</button>
+          <button type="button" id="copySave">Copy</button>
+          <button type="button" id="importSave">Import</button>
+        </div>
+      </div>
+      <p class="setting-note about">One in a <span id="melonWord">Melon</span> <span id="gameVersion"></span> · Food pictures: <a href="https://github.com/microsoft/fluentui-emoji" target="_blank" rel="noopener">Fluent Emoji</a> by Microsoft (MIT licence)</p>
+      <div class="modal-buttons"><button type="button" id="settingsClose">Close</button></div>
+    </div>
+  </div>
+
+  <!-- One-time tip after half an hour of play -->
+  <div id="backupModal" class="modal">
+    <div class="modal-box">
+      <h2>💾 Back up your save</h2>
+      <p>Your progress only lives in this browser. If its data gets cleared, it's gone. Export a backup code in Settings and keep it somewhere safe, like a note or a message to yourself.</p>
+      <div class="modal-buttons">
+        <button type="button" id="backupGo" class="primary">Open Settings</button>
+        <button type="button" id="backupLater">Later</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shown once, when auto roll unlocks -->
+  <div id="unlockModal" class="modal">
+    <div class="modal-box clue-box">
+      <h2>🎲 Auto roll unlocked!</h2>
+      <p class="clue-text">You rolled 15 times. Now the game can roll for you.</p>
+      <p class="setting-note">Tick "Auto roll" under the Roll button. Pair it with Auto eat for luck while you wait.</p>
+      <div class="modal-buttons">
+        <button type="button" id="unlockTry" class="primary">Turn it on</button>
+        <button type="button" id="unlockClose">Later</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shown once, if someone rolls a while without eating -->
+  <div id="eatTipModal" class="modal">
+    <div class="modal-box clue-box">
+      <h2>🍽️ Eat food for luck!</h2>
+      <p class="clue-text">Your luck only goes up when you eat. Without it, the rare foods stay very rare.</p>
+      <p class="setting-note">Eat food from your Inventory, or let Auto eat do it for you. "Common to Rare" keeps your best finds safe.</p>
+      <div class="modal-buttons">
+        <button type="button" id="eatTipTry" class="primary">Turn on Auto eat</button>
+        <button type="button" id="eatTipClose">Later</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hunt clues: stay until closed -->
+  <div id="clueModal" class="modal">
+    <div class="modal-box clue-box">
+      <h2 id="clueTitle"></h2>
+      <p id="clueText" class="clue-text"></p>
+      <p id="clueNote" class="setting-note"></p>
+      <div class="modal-buttons"><button type="button" id="clueClose" class="primary">Got it</button></div>
+    </div>
+  </div>
+
+  <div id="mgModal" class="modal">
+    <div class="modal-box mg-box">
+      <h2 id="mgTitle"></h2>
+      <p id="mgInfo"></p>
+      <div id="mgArea" class="mg-area"></div>
+      <div class="modal-buttons"><button type="button" id="mgClose">Give up</button></div>
+    </div>
+  </div>
+
+  <div id="cutscene" class="cutscene">
+    <div id="csStage" class="cs-stage">
+      <div id="csFx" class="cs-fx"></div>
+      <div id="csParticles" class="cs-particles"></div>
+      <div class="cs-vignette"></div>
+      <div id="csCounter" class="cs-counter"></div>
+      <div id="csShock" class="cs-shock"></div>
+      <div id="csReveal" class="cs-reveal">
+        <div id="csEmoji" class="cs-emoji"></div>
+        <div id="csName" class="cs-name"></div>
+        <div id="csOdds" class="cs-odds"></div>
+      </div>
+    </div>
+    <div id="csBlackout" class="cs-blackout"></div>
+  </div>
+
+  <div id="mutFlash" class="mut-flash"><div id="mutFlashText"></div></div><!-- big flash for rare rolls without a cutscene -->
+
+  <div id="codeModal" class="modal">
+    <form id="codeForm" class="modal-box">
+      <h2>📜 Codes</h2>
+      <p>Found a secret code? Type it here.</p>
+      <p id="codeNote" class="code-note" hidden></p>
+      <input id="codeInput" autocomplete="off" placeholder="Enter code">
+      <div class="modal-buttons">
+        <button type="submit">Redeem</button>
+        <button type="button" id="codeClose">Close</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="toasts" class="toasts"></div>
+
+  <!-- Who's playing? Covers the page until someone picks a profile -->
+  <div id="loginScreen" class="login" hidden>
+    <div class="modal-box login-box">
+      <h2>👤 Who's playing?</h2>
+      <div id="profileList" class="profile-list"></div>
+      <form id="loginForm" class="login-form" hidden>
+        <p id="loginWho" class="login-who"></p>
+        <input type="password" id="loginPw" placeholder="Password" autocomplete="current-password">
+        <label class="login-check"><input type="checkbox" id="loginRemember"> Remember me on this browser</label>
+        <div class="modal-buttons">
+          <button type="submit">Play</button>
+          <button type="button" class="login-back">Back</button>
+        </div>
+      </form>
+      <form id="newForm" class="login-form" hidden>
+        <p class="login-who">New profile</p>
+        <input id="newName" maxlength="16" placeholder="Name" autocomplete="username">
+        <input type="password" id="newPw" placeholder="Password (optional)" autocomplete="new-password">
+        <input type="password" id="newPw2" placeholder="Password again" autocomplete="new-password">
+        <label id="newKeepRow" class="login-check"><input type="checkbox" id="newKeep"> Keep the progress already saved in this browser</label>
+        <label class="login-check"><input type="checkbox" id="newRemember"> Remember me on this browser</label>
+        <div class="modal-buttons">
+          <button type="submit">Create</button>
+          <button type="button" class="login-back">Back</button>
+        </div>
+      </form>
+      <p id="loginError" class="login-error"></p>
+    </div>
+  </div>
+
+  <!-- profiles.js picks who's playing, then loads game.js -->
+  <script src="profiles.js"></script>
+</body>
+</html>
