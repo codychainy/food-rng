@@ -669,7 +669,7 @@ const SAVE_KEY = window.PROFILE ? PROFILE.saveKey : 'foodRngSave';
 const save = Object.assign({
   rolls: 0, inv: {}, found: {}, mutCount: {}, buffs: [], perm: 0, codes: [], breadEaten: 0, totalEaten: 0,
   best: null, triggers: {}, streak: { id: null, count: 0 }, settings: {},
-  charges: { lucky: 0, floor: null, mut: null }, cooked: {}, recipesUnlocked: {}, cookFails: 0, picked: {}, glazedDonuts: 0, pot: {}, clues: {}, treasure: 0, coins: 0, coinsEarned: 0, scrapsBought: 0, favs: {}, sizes: {}, biggest: {}, smallest: 1, itemsSold: 0, mushMade: 0, mushStreak: 0, hunts: {}, huntRoots: 0, shopBought: {}, upgrades: {}, themes: { classic: true },
+  charges: { lucky: 0, floor: null, muts: [] }, cooked: {}, recipesUnlocked: {}, cookFails: 0, picked: {}, glazedDonuts: 0, pot: {}, clues: {}, treasure: 0, coins: 0, coinsEarned: 0, scrapsBought: 0, favs: {}, sizes: {}, biggest: {}, smallest: 1, itemsSold: 0, mushMade: 0, mushStreak: 0, hunts: {}, huntRoots: 0, shopBought: {}, upgrades: {}, themes: { classic: true },
 }, load());
 save.settings = Object.assign({ autoEat: 'off', sound: true, music: true, deleteBelow: 0, luckCap: 0, theme: 'classic', cutsceneOdds: CUTSCENE_ODDS }, save.settings);
 // The default used to be 1 in 1,000,000. Saves still on that move to the new default once.
@@ -678,6 +678,10 @@ if (!save.settings.csOddsMoved) {
   save.settings.csOddsMoved = true;
 }
 save.upgrades = Object.assign({ eye: 0, pot: 0 }, save.upgrades);
+// Guaranteed mutations used to be one slot (charges.mut), so a new one wiped out the old one. Now they are a list.
+if (!save.charges.muts) save.charges.muts = save.charges.mut ? [save.charges.mut] : [];
+delete save.charges.mut;
+save.charges.muts = save.charges.muts.filter(c => MUT[c.id] && c.rolls > 0);
 
 function load() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) { return {}; }
@@ -1158,11 +1162,15 @@ async function roll(auto = false) {
     minChance = FLOOR_CHANCE[floor.tier];
     if (--floor.rolls <= 0) save.charges.floor = null;
   }
+  // Guaranteed mutations: with two different ones waiting, every roll gets both (a double mutation).
+  // A third one waits its turn.
   let forcedMut = null;
-  const mutCharge = save.charges.mut;
-  if (mutCharge) {
-    forcedMut = MUT[mutCharge.id];
-    if (--mutCharge.rolls <= 0) save.charges.mut = null;
+  const mutCharges = save.charges.muts.slice(0, 2);
+  if (mutCharges.length) {
+    const [a, b] = mutCharges.map(c => MUT[c.id]);
+    forcedMut = b ? doubleOf(a, b) : a;
+    for (const c of mutCharges) c.rolls--;
+    save.charges.muts = save.charges.muts.filter(c => c.rolls > 0);
   }
   if (!forcedMut && save.charges.anyMut > 0) {
     save.charges.anyMut--;
@@ -1172,7 +1180,7 @@ async function roll(auto = false) {
   const luck = rollLuck(lucky);
   const food = save.rolls === 777 ? FOOD.clover : pickFood(luck, minChance);
   let mut = forcedMut || pickMutation(luck);
-  // Rarely a second mutation lands on top (see DOUBLE_GATE). Forced mutations stay single.
+  // Rarely a second mutation lands on top (see DOUBLE_GATE). Forced mutations don't get a random extra one.
   if (mut && !forcedMut && Math.random() < 1 / DOUBLE_GATE) {
     const second = pickMutation(luck);
     if (second && second !== mut) mut = doubleOf(mut, second);
@@ -1364,6 +1372,13 @@ function eat(key, silent = false) {
   return true;
 }
 
+// The next N rolls get this mutation. The same mutation again adds more rolls; a different one joins the list.
+function addMutCharge(id, rolls) {
+  const c = save.charges.muts.find(x => x.id === id);
+  if (c) c.rolls += rolls;
+  else save.charges.muts.push({ id, rolls });
+}
+
 // Gives the power of a food or meal. A meal can have several kinds of power at once.
 function applyEffect(key, silent = false) {
   const { food } = parseKey(key);
@@ -1391,9 +1406,7 @@ function applyEffect(key, silent = false) {
     if (!silent) toast(`${food.name}: next rolls are at least ${TIERS[e.floor.tier].label}!`, color);
   }
   if (e.forceMut) {
-    const f = save.charges.mut;
-    if (f && f.id === e.forceMut.id) f.rolls += e.forceMut.rolls;
-    else save.charges.mut = { ...e.forceMut };
+    addMutCharge(e.forceMut.id, e.forceMut.rolls);
     if (!silent) toast(`${food.name}: next rolls are ${MUT[e.forceMut.id].name}!`, MUT[e.forceMut.id].color);
   }
   if (e.time && (e.luck || e.speed || e.mutBoost || e.double)) {
@@ -1666,18 +1679,30 @@ async function openSafe() {
 }
 
 // ---------- Minigames ----------
-// setup(area, info, finish, timers) builds the game. finish(true/false) ends it; timers are cleared then.
+// setup(area, info, finish, every) builds the game. finish(true/false) ends it.
+// every(fn, ms) is a repeating timer that waits while a cutscene covers the screen, so the game
+// pauses and carries on after. setup can return { pause, resume } for anything else that must stop.
 let endMinigame = null;
 function openMinigame(title, setup) {
   return new Promise(resolve => {
     const area = $('mgArea');
     const timers = [];
     let done = false;
+    let paused = false;
+    let hooks = null;
     const info = text => { $('mgInfo').textContent = text; };
+    const every = (fn, ms) => timers.push(setInterval(() => { if (!paused) fn(); }, ms));
+    timers.push(setInterval(() => {
+      if (paused === cutscenePlaying) return;
+      paused = cutscenePlaying;
+      area.classList.toggle('paused', paused);
+      if (hooks) (paused ? hooks.pause : hooks.resume)();
+    }, 100));
     const finish = win => {
       if (done) return;
       done = true;
       timers.forEach(clearTimeout); // also clears intervals
+      if (hooks) hooks.pause(); // the game's own timers too (Give up)
       area.onpointerdown = null;
       setTimeout(() => $('mgModal').classList.remove('show'), win ? 600 : 0);
       if (win) sfx.chime();
@@ -1686,14 +1711,15 @@ function openMinigame(title, setup) {
     endMinigame = () => finish(false);
     $('mgTitle').textContent = title;
     area.innerHTML = '';
+    area.classList.remove('paused');
     $('mgModal').classList.add('show');
-    setup(area, info, finish, timers);
+    hooks = setup(area, info, finish, every) || null;
   });
 }
 $('mgClose').addEventListener('click', () => endMinigame && endMinigame());
 
 function whackAMole() {
-  return openMinigame('Whack-a-Mole', (area, info, finish, timers) => {
+  return openMinigame('Whack-a-Mole', (area, info, finish, every) => {
     const GOAL = 12;
     area.className = 'mg-area mg-grid';
     area.innerHTML = Array.from({ length: 9 }, (_, i) => `<button class="mg-hole" data-i="${i}"></button>`).join('');
@@ -1714,21 +1740,24 @@ function whackAMole() {
       if (++hits >= GOAL) finish(true);
       status();
     };
-    timers.push(setInterval(pop, 750));
-    timers.push(setInterval(() => { left--; status(); if (left <= 0) finish(false); }, 1000));
+    every(pop, 750);
+    every(() => { left--; status(); if (left <= 0) finish(false); }, 1000);
     pop();
     status();
   });
 }
 
 function memoryGame() {
-  return openMinigame('The Safe', (area, info, finish, timers) => {
+  return openMinigame('The Safe', (area, info, end) => {
     const LENGTHS = [4, 5, 6];
     area.className = 'mg-area mg-simon';
     area.innerHTML = ['pizza', 'donut', 'sushi', 'apple'].map((id, i) => `<button class="mg-pad" data-i="${i}">${imgTag(FOOD[id], true)}</button>`).join('');
     const pads = [...area.children];
     const seq = [];
     let round = 0, pos = 0, listening = false;
+    let timers = [];
+    const stopTimers = () => { timers.forEach(clearTimeout); timers = []; pads.forEach(p => p.classList.remove('lit')); };
+    const finish = win => { stopTimers(); end(win); };
     const flashPad = (p, at, ms) => {
       timers.push(setTimeout(() => { pads[p].classList.add('lit'); sfx.tick(); }, at));
       timers.push(setTimeout(() => pads[p].classList.remove('lit'), at + ms));
@@ -1759,6 +1788,8 @@ function memoryGame() {
       }
     };
     play();
+    // A cutscene in the middle: stop, then show this lock's order again from the start
+    return { pause: stopTimers, resume: play };
   });
 }
 
@@ -2097,13 +2128,12 @@ function renderBuffs() {
       <span class="b-info">Mutation Spray<div class="b-effect">random mutation</div></span>
       <span class="b-time">${save.charges.anyMut} left</span></li>`);
   }
-  const mc = save.charges.mut;
-  if (mc) {
+  save.charges.muts.forEach((mc, i) => {
     const m = MUT[mc.id];
     items.push(`<li style="--c:${m.color}"><span class="b-emoji">${m.icon}</span>
-      <span class="b-info">${m.name} rolls<div class="b-effect">guaranteed mutation</div></span>
+      <span class="b-info">${m.name} rolls<div class="b-effect">${i < 2 ? 'guaranteed mutation' : 'waiting for a free spot'}</div></span>
       <span class="b-time">${mc.rolls} left</span></li>`);
-  }
+  });
   el.charges.innerHTML = items.join('') || (save.buffs.length ? '' : '<li class="empty">Eat food to get buffs!</li>');
 
   // Food buffs live in a dropdown with a one-line summary, strongest first.
@@ -2561,12 +2591,7 @@ const POWERUPS = [
   { id: 'epicticket', icon: '🎫', name: 'Epic Ticket', desc: 'Next 3 rolls are at least Epic', base: 2500, buy: () => addFloor('epic') },
   { id: 'mutspray', icon: '🧪', name: 'Mutation Spray', desc: 'Your next roll gets a random mutation', base: 400,
     buy: () => { save.charges.anyMut = (save.charges.anyMut || 0) + 1; } },
-  { id: 'goldseason', icon: '🧂', name: 'Golden Seasoning', desc: 'Next 5 rolls are Golden', base: 1500, buy: () => {
-    const m = save.charges.mut;
-    if (m && m.id !== 'golden') return toast(`Wait until your ${MUT[m.id].name} rolls run out.`, '#ff8080'), false;
-    if (m) m.rolls += 5;
-    else save.charges.mut = { id: 'golden', rolls: 5 };
-  } },
+  { id: 'goldseason', icon: '🧂', name: 'Golden Seasoning', desc: 'Next 5 rolls are Golden', base: 1500, buy: () => addMutCharge('golden', 5) },
   { id: 'crate', icon: '📦', name: 'Ingredient Crate', desc: '12 random common and uncommon foods', base: 150, flat: true, buy: openCrate },
 ];
 const powerupPrice = p => p.flat ? p.base : Math.round(p.base * 2 ** (save.shopBought[p.id] || 0));
