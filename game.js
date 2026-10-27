@@ -16,11 +16,12 @@ const TIERS = {
 const TIER_ORDER = Object.keys(TIERS);
 
 // ---------- Events ----------
-// from/to are [month, day] with January = 0, both days included.
+// from/to are [month, day] with January = 0, both days included. An event can run over New Year (from Dec, to Jan).
 // Event foods only roll during the event, but anything you got stays yours. Event stuff
 // never counts toward the "find every..." achievements, so missing an event doesn't lock you out.
 const EVENTS = {
-  halloween: { icon: '🎃', name: 'Halloween', from: [9, 24], to: [10, 2], banner: 'Halloween event until Nov 2: spooky foods are in the roll' },
+  halloween: { icon: '🎃', name: 'Halloween', color: '#ff8c1a', from: [9, 24], to: [10, 2], banner: 'Halloween event until Nov 2: spooky foods are in the roll' },
+  christmas: { icon: '🎄', name: 'Christmas', color: '#ff4d6d', from: [11, 1], to: [0, 5], banner: 'Christmas event until Jan 5: festive foods are in the roll' },
 };
 // Opening the game from your own computer with ?event=halloween turns an event on outside its dates, for testing
 const TEST_EVENT = location.protocol === 'file:' ? new URLSearchParams(location.search).get('event') : null;
@@ -29,7 +30,8 @@ function eventOn(id) {
   const e = EVENTS[id];
   const d = new Date();
   const today = d.getMonth() * 100 + d.getDate();
-  return today >= e.from[0] * 100 + e.from[1] && today <= e.to[0] * 100 + e.to[1];
+  const from = e.from[0] * 100 + e.from[1], to = e.to[0] * 100 + e.to[1];
+  return from <= to ? today >= from && today <= to : today >= from || today <= to;
 }
 const notEvent = x => !x.event;
 
@@ -37,6 +39,7 @@ const notEvent = x => !x.event;
 // Each row: [id, name, emoji, chance (1 in N), luck bonus, speed bonus, buff seconds]. +1 = +100%.
 const rows = (tier, list) => list.map(([id, name, emoji, chance, luck, speed, time]) => ({ id, name, emoji, chance, tier, luck, speed, time }));
 const spooky = (tier, list) => rows(tier, list).map(f => ({ ...f, event: 'halloween' }));
+const festive = (tier, list) => rows(tier, list).map(f => ({ ...f, event: 'christmas' }));
 
 const FOODS = [
   ...rows('common', [
@@ -310,6 +313,30 @@ const FOODS = [
   { id: 'candybucket', name: 'Haunted Candy Bucket', emoji: '🍭', img: 'lollipop', tier: 'secret', event: 'halloween', perm: 0.31,
     forceMut: { id: 'pumpkinspice', rolls: 13 }, filter: 'hue-rotate(220deg) saturate(1.4) drop-shadow(0 0 14px #b05cff)',
     hint: () => huntHint('haunt') },
+
+  // Christmas event: these only roll while the event is on (the odds are full of 12s and 25s)
+  ...festive('uncommon', [
+    ['candycane', 'Candy Cane', '🍬', 25, 0.3, 0.15, 100],
+    ['gingerbread', 'Gingerbread Man', '🍪', 36, 0.45, 0.1, 100],
+  ]),
+  ...festive('rare', [
+    ['cocoa', 'Hot Cocoa', '☕', 125, 0.6, 0.4, 130],
+    ['mincepie', 'Mince Pie', '🥧', 251, 0.9, 0.3, 140],
+  ]),
+  ...festive('epic', [
+    ['pudding', 'Christmas Pudding', '🍮', 1225, 1.3, 0.8, 180],
+    ['eggnog', 'Eggnog', '🥛', 2512, 1.6, 0.5, 190],
+  ]),
+  ...festive('legendary', [
+    ['turkey', 'Roast Turkey', '🍗', 12251, 3.5, 1, 250],
+    ['yulelog', 'Yule Log', '🪵', 25122, 4.5, 1.5, 260],
+  ]),
+  ...festive('mythic', [['gingerhouse', 'Gingerbread House', '🏠', 122512, 12, 5, 330]]),
+  ...festive('divine', [['santaplate', "Santa's Cookie Plate", '🎅', 1225251, 50, 12, 600]]),
+  // The Christmas hunt's reward (see HUNTS.snowman)
+  { id: 'snowcone', name: 'North Pole Snow Cone', emoji: '🍧', img: 'shavedice', tier: 'secret', event: 'christmas', perm: 0.25,
+    forceMut: { id: 'giftwrapped', rolls: 12 }, filter: 'hue-rotate(160deg) saturate(1.3) drop-shadow(0 0 14px #bfe9ff)',
+    hint: () => huntHint('snowman') },
 ];
 const FOOD = Object.fromEntries(FOODS.map(f => [f.id, f]));
 FOOD.ambrosia.perm = 1;
@@ -325,6 +352,17 @@ Object.assign(FOOD.jackpie, { img: 'jackolantern' });
 Object.assign(FOOD.sugarskull, { img: 'skull', filter: 'drop-shadow(0 0 10px #ff7ad9)' });
 Object.assign(FOOD.witchbrew, { img: 'potion', filter: 'hue-rotate(80deg) saturate(1.5) drop-shadow(0 0 12px #9dff5c)' });
 Object.assign(FOOD.greatpumpkin, { img: 'jackolantern', filter: 'saturate(1.5) drop-shadow(0 0 18px #ffb627) drop-shadow(0 0 36px #ff7b00)' });
+// Christmas foods that borrow another picture
+Object.assign(FOOD.candycane, { img: 'lollipop', filter: 'hue-rotate(-20deg) saturate(1.4)' });
+Object.assign(FOOD.gingerbread, { img: 'cookie', filter: 'sepia(0.8) saturate(1.8) hue-rotate(-10deg) brightness(0.9)' });
+Object.assign(FOOD.cocoa, { img: 'coffee', filter: 'sepia(0.5) saturate(1.3)' });
+Object.assign(FOOD.mincepie, { img: 'codepie', filter: 'brightness(0.85) saturate(1.2)' });
+Object.assign(FOOD.pudding, { img: 'custard', filter: 'sepia(0.9) saturate(1.5) hue-rotate(-15deg) brightness(0.6)' });
+Object.assign(FOOD.eggnog, { img: 'milk', filter: 'sepia(0.6) saturate(1.6)' });
+Object.assign(FOOD.turkey, { img: 'drumstick', filter: 'saturate(1.3) drop-shadow(0 0 10px #ffb627)' });
+Object.assign(FOOD.yulelog, { img: 'wood', filter: 'drop-shadow(0 0 10px #ffe9c4)' });
+Object.assign(FOOD.gingerhouse, { img: 'house', filter: 'sepia(0.9) saturate(1.8) hue-rotate(-15deg) drop-shadow(0 0 12px #ffd6a0)' });
+Object.assign(FOOD.santaplate, { img: 'santa', filter: 'drop-shadow(0 0 18px #ff4d6d) drop-shadow(0 0 36px #ffffff)' });
 // Sorted by odds so the Index reads from most common to rarest, wherever a food was added in the list above
 const NORMAL_FOODS = FOODS.filter(f => f.tier !== 'secret' && !f.event).sort((a, b) => a.chance - b.chance);
 const EVENT_FOODS = FOODS.filter(f => f.tier !== 'secret' && f.event).sort((a, b) => a.chance - b.chance);
@@ -411,6 +449,13 @@ const MEALS = [
   { id: 'monstermash', name: 'Monster Mash', emoji: '🧟', img: 'potato', filter: 'hue-rotate(70deg) saturate(1.4) brightness(0.9)', event: 'halloween',
     needs: { batchips: 1, toffeeapple: 3, potato: 5 }, forceMut: { id: 'pumpkinspice', rolls: 5 }, luck: 3, time: 313,
     clue: 'Something that flaps at night, three sticky fruits on sticks, and a pile of lumps from the ground, mashed.' },
+
+  // Christmas recipes: same as Halloween, scraps only during the event
+  { id: 'santasnack', name: 'Snack for Santa', emoji: '🥛', img: 'cookie', event: 'christmas', needs: { gingerbread: 3, candycane: 2, milk: 1 }, luckyRolls: 12,
+    clue: 'Left out on Christmas Eve: three little runaways, two striped hooks, one cold glass of white.' },
+  { id: 'xmasdinner', name: 'Christmas Dinner', emoji: '🍽️', img: 'drumstick', filter: 'saturate(1.4) drop-shadow(0 0 10px #ff4d6d)', event: 'christmas',
+    needs: { pudding: 1, potato: 5, carrot: 3 }, forceMut: { id: 'giftwrapped', rolls: 5 }, luck: 3, time: 325,
+    clue: 'The big meal: a dark round dessert with a sprig on top, a heap of lumps from the ground, and three of what a snowman wants for a nose.' },
 ];
 const REGULAR_MEALS = MEALS.filter(notEvent);
 for (const m of MEALS) {
@@ -490,6 +535,9 @@ const MUTATIONS = [
   { id: 'pumpkinspice', name: 'Pumpkin Spice', icon: '🎃', chance: 200, color: '#ff8c1a', power: 2.5, time: 1.5, event: 'halloween', anim: 'm-wobble',
     filter: 'sepia(0.7) saturate(2.5) hue-rotate(-20deg) drop-shadow(0 0 12px #ff8c1a)', desc: 'Everything tastes like autumn.',
     cond: () => eventOn('halloween') },
+  { id: 'giftwrapped', name: 'Gift Wrapped', icon: '🎁', chance: 200, color: '#ff4d6d', power: 2.5, time: 1.5, event: 'christmas', anim: 'm-sparkle',
+    filter: 'hue-rotate(-20deg) saturate(1.3) drop-shadow(0 0 3px #ffffff) drop-shadow(0 0 12px #ff4d6d)', desc: 'Comes with a bow on top. Nobody knows who wrapped it.',
+    cond: () => eventOn('christmas') },
 ];
 const MUT = Object.fromEntries(MUTATIONS.map(m => [m.id, m]));
 const REGULAR_MUTS = MUTATIONS.filter(notEvent);
@@ -623,6 +671,12 @@ const SCENES = {
   greatpumpkin: { bg: 'radial-gradient(circle at 50% 30%, #ffd166 0 6%, #ff7b00 20%, #3a1060 55%, #05010d)', color: '#ffb627', fx: 'rays', p: '🎃 🦇 🌕 ✨', motion: 'burst' },
   candybucket: { bg: 'linear-gradient(#2a0a3d, #0b0212)', color: '#ffb627', fx: 'stars', p: '🍬 🍭 👻 🦇', motion: 'fall' },
 
+  turkey: { bg: 'radial-gradient(circle at 50% 60%, #c1121f, #3a0509 45%, #0a0102)', color: '#ffd166', fx: 'rays', p: '🍗 🕯️ 🎄', motion: 'drift' },
+  yulelog: { bg: 'radial-gradient(circle at 50% 80%, #ff7b00, #3b1d0a 45%, #0a0502)', color: '#ffe9c4', fx: 'none', p: '🪵 🔥 ❄️', motion: 'rise' },
+  gingerhouse: { bg: 'linear-gradient(#0b2a4a, #04101e)', color: '#ffd6a0', fx: 'stars', p: '🍬 🍪 ❄️ 🏠', motion: 'fall' },
+  santaplate: { bg: 'radial-gradient(circle at 50% 30%, #ffffff 0 5%, #ff4d6d 18%, #0f3d22 55%, #020a05)', color: '#ffffff', fx: 'rays', p: '🎅 🦌 🍪 ⭐', motion: 'burst' },
+  snowcone: { bg: 'linear-gradient(#0f2a44, #02080f)', color: '#bfe9ff', fx: 'stars', p: '❄️ ⛄ 🍧 🎁', motion: 'fall' },
+
   'mut:electric': { bg: 'radial-gradient(circle, #3a3a00, #000 70%)', color: '#ffe600', fx: 'lightning', p: '⚡', motion: 'burst' },
   'mut:cosmic': { bg: 'radial-gradient(circle, #24005a, #000 70%)', color: '#c4b5fd', fx: 'stars', p: '🌌 ⭐', motion: 'orbit' },
   'mut:void': { bg: '#000', color: '#c77dff', fx: 'rings', p: '🕳️ ⚫', motion: 'orbit' },
@@ -652,7 +706,7 @@ const CODES = {
   NOLEM:  { text: 'The melon splits open. Not a single seed inside.', only: () => huntStep('cipher') === 1, then: () => finishHunt('cipher') },
 };
 
-const GAME_VERSION = '1.0'; // bump it and update "What's new" in index.html, and players see How to play once more
+const GAME_VERSION = '1.1'; // bump it and update "What's new" in index.html, and players see How to play once more
 const AUTO_ROLL_AFTER = 15; // rolls by hand before auto roll shows up
 const BACKUP_TIP_AFTER = 1800; // seconds of play before the "back up your save" tip
 const EAT_TIP_AFTER = 30; // rolls without eating anything before the "eat food for luck" tip
@@ -1357,6 +1411,7 @@ function eat(key, silent = false) {
   if (food.id === 'oyster' && save.treasure === 0) advanceTreasure(1);
   if (ROOTS.includes(food.id) && huntStep('mole') === 0 && ++save.huntRoots >= 10) advanceHunt('mole', 1);
   if (food.id === 'ghostmallow' && huntStep('haunt') === 0) advanceHunt('haunt', 1);
+  if (food.id === 'cocoa' && huntStep('snowman') === 0) advanceHunt('snowman', 1);
   if (food.id === 'milk' && huntStep('phantom') === 2) advanceHunt('phantom', 3);
   if (food.id === 'watermelon' && huntStep('map') === 0 && (save.melonsEaten = (save.melonsEaten || 0) + 1) >= 10) advanceHunt('map', 1);
   if (save.totalEaten >= 100) unlockSecret('feastmedal');
@@ -1503,6 +1558,7 @@ $('clueClose').addEventListener('click', () => $('clueModal').classList.remove('
 // safe:  cook a Breakfast Plate -> open the safe under the pot (memory game) -> code 2009
 // comet: roll something 1 in 1,000,000+ -> scroll right past the recent rolls and click the comet
 // haunt (Halloween): eat a Ghost Marshmallow -> knock 3 times on the door by the title -> light every candle
+// snowman (Christmas): drink a Hot Cocoa -> give the snowman by the title a carrot nose -> catch the snow
 // The three hardest hunts (all melon themed):
 // cipher: find Burnt Melon and The One Melon -> a note in the Codes book, shifted 7 letters -> code NOLEM
 // map:    eat 10 Watermelons -> 4 torn map pieces hidden in the Mutations tab (past the end), the Index
@@ -1533,6 +1589,11 @@ const HUNTS = {
   haunt: { secret: 'candybucket', clues: [
     'Something sweet is haunted this year. Take a bite and see who answers.',
     'A door has appeared where there was none, right at the top. Ghosts are polite: knock first.',
+  ] },
+  snowman: { secret: 'snowcone', clues: [
+    'Snow is coming. Something hot and sweet would warm you up first.',
+    'Someone built a snowman at the top of the page. His face is missing something orange.',
+    'The snowman can smell snow now. Catch it before it melts.',
   ] },
   mole: { secret: 'molestash', clues: [
     'Something is digging under the kitchen. It is hungry for things that grow underground.',
@@ -1574,6 +1635,7 @@ function updateHuntUI() {
   $('cometTrail').hidden = huntStep('comet') !== 1;
   $('xSpot').hidden = save.treasure !== 3;
   $('hauntDoor').hidden = huntStep('haunt') !== 1;
+  $('snowman').hidden = ![1, 2].includes(huntStep('snowman'));
   $('helpPiece').hidden = huntStep('map') !== 4;
   $('mapSpot').hidden = huntStep('map') !== 5;
   $('phantomSeed').hidden = huntStep('phantom') !== 1;
@@ -1658,6 +1720,22 @@ $('hauntDoor').addEventListener('click', async () => {
   knocks = 0;
   if (await candlePuzzle()) finishHunt('haunt');
   else toast('The candles blow out. The door creaks shut.', '#ff8080');
+});
+
+// Christmas hunt: the snowman takes a carrot (any mutation) for his nose, then wants to catch snow
+$('snowman').addEventListener('click', async () => {
+  sfx.tick();
+  if (huntStep('snowman') === 1) {
+    const carrot = save.inv.carrot ? 'carrot' : Object.keys(save.inv).find(k => parseKey(k).food.id === 'carrot');
+    if (!carrot) return toast('The snowman stares at you. Something is missing.', '#bfe9ff');
+    if (!--save.inv[carrot]) delete save.inv[carrot];
+    toast('🥕 The snowman has a nose now!', '#bfe9ff');
+    advanceHunt('snowman', 2);
+    renderAll();
+  } else if (huntStep('snowman') === 2) {
+    if (await snowCatch()) finishHunt('snowman');
+    else toast('The snow melted. The snowman looks sad.', '#ff8080');
+  }
 });
 
 async function openSafe() {
@@ -1798,6 +1876,40 @@ function candlePuzzle() {
       }
     };
     show();
+  });
+}
+
+// Snowflakes fall down the box. Tap them before they reach the bottom.
+function snowCatch() {
+  return openMinigame('Catch the Snow', (area, info, finish, timers) => {
+    const GOAL = 15;
+    area.className = 'mg-area mg-snow';
+    let caught = 0, left = 20;
+    const status = () => info(`Catch ${GOAL} snowflakes before they melt · ${caught}/${GOAL} · ${left}s left`);
+    const drop = () => {
+      const f = document.createElement('button');
+      f.className = 'mg-flake';
+      f.textContent = '❄️';
+      f.style.left = `${4 + Math.random() * 84}%`;
+      f.style.animationDuration = `${2.2 + Math.random() * 1.3}s`;
+      f.addEventListener('animationend', () => f.remove());
+      area.appendChild(f);
+    };
+    area.onpointerdown = e => {
+      const f = e.target.closest('.mg-flake');
+      if (!f) return;
+      f.remove();
+      sfx.pop();
+      if (++caught >= GOAL) {
+        info('The snowman catches the last one on his new nose.');
+        return finish(true);
+      }
+      status();
+    };
+    timers.push(setInterval(drop, 550));
+    timers.push(setInterval(() => { left--; status(); if (left <= 0) finish(false); }, 1000));
+    drop();
+    status();
   });
 }
 
@@ -2607,6 +2719,7 @@ const THEMES = [
   { id: 'gold', name: 'Gold', price: 20000 },
   // Free while its event is on, and yours to keep after
   { id: 'halloween', name: 'Halloween', price: 0, event: 'halloween' },
+  { id: 'christmas', name: 'Christmas', price: 0, event: 'christmas' },
 ];
 for (const t of THEMES) if (t.event && eventOn(t.event)) save.themes[t.id] = true;
 function applyTheme() {
@@ -2837,6 +2950,7 @@ const SECRET_HOW = {
   seedvault: 'Eat 10 Watermelons → 🧩 below the last mutation in the Mutations tab → click the Watermelon picture in the Index → click "Melon" in the Settings credit line → 🧩 at the end of How to play → click 🗺️ under Roll and turn every map piece upright.',
   phantommelon: 'Redeem ONEINAMELON → click the tiny seed next to Reset save → eat a Milk → turn the music off and on 3 times → hold the 🍉 logo for 3 seconds.',
   candybucket: 'During Halloween: eat a Ghost Marshmallow → knock 3 times on the 🚪 by the title → light every candle.',
+  snowcone: 'During Christmas: eat a Hot Cocoa → click the ⛄ by the title with a Carrot in your inventory (it takes one for a nose) → click him again and catch 15 snowflakes.',
 };
 
 // Clue journal: every clue you have been given, hunt by hunt (worked out from how far each hunt got).
@@ -2868,7 +2982,7 @@ function renderSecrets() {
     return `<div class="row ${seen ? '' : 'locked'}" style="--c:${TIERS.secret.color}">
       <span class="r-emoji">${seen ? emojiHtml(f.id) : '🔒'}</span>
       <span class="r-info">
-        <div class="r-name">${ev ? `<span class="tag" style="--m:#ff8c1a">${ev.icon} ${ev.name}</span> ` : ''}${seen ? f.name : '???'}</div>
+        <div class="r-name">${ev ? `<span class="tag" style="--m:${ev.color}">${ev.icon} ${ev.name}</span> ` : ''}${seen ? f.name : '???'}</div>
         <div class="r-sub">${seen ? effectText(f.id) : 'Hint: ' + (typeof f.hint === 'function' ? f.hint() : f.hint)}</div>
         ${seen && SECRET_HOW[f.id] ? `<div class="r-sub secret-how">🔓 How: ${SECRET_HOW[f.id]}</div>` : ''}
       </span>
@@ -3361,6 +3475,16 @@ if (eventOn('halloween')) {
     bat.textContent = '🦇';
     bat.style.cssText = `top:${5 + Math.random() * 70}%;animation-duration:${16 + Math.random() * 12}s;animation-delay:${-Math.random() * 28}s`;
     document.body.appendChild(bat);
+  }
+}
+// Snow falls during Christmas
+if (eventOn('christmas')) {
+  for (let i = 0; i < 14; i++) {
+    const flake = document.createElement('span');
+    flake.className = 'snow';
+    flake.textContent = '❄️';
+    flake.style.cssText = `left:${Math.random() * 98}%;font-size:${10 + Math.random() * 10}px;animation-duration:${10 + Math.random() * 10}s;animation-delay:${-Math.random() * 20}s`;
+    document.body.appendChild(flake);
   }
 }
 
