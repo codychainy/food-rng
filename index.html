@@ -142,6 +142,7 @@
   <footer>
     <button id="profileBtn" hidden title="Switch profile">👤</button>
     <button id="helpBtn">❓ How to play</button>
+    <button id="statsBtn">📊 Stats</button>
     <button id="codesBtn">📜 Codes</button>
     <button id="settingsBtn">⚙️ Settings</button>
     <button id="resetBtn" class="danger">Reset save</button>
@@ -158,14 +159,11 @@
     <div class="modal-box help-box">
       <h2>❓ How to play</h2>
       <div class="whats-new">
-        <b>🆕 What's new in v1.0</b>
+        <b>🆕 What's new in v1.1</b>
         <ul class="help-list">
-          <li><b>🎃 Halloween event</b> until Nov 2: spooky foods, a new mutation, two recipes and something knocking...</li>
-          <li><b>📅 Daily challenges</b>: three new goals every day for coins. Finish all three to build a streak.</li>
-          <li><b>👤 Profiles</b>: everyone on this browser gets their own save, with an optional password.</li>
-          <li><b>🪙 Shop search</b>: find what you can sell, and see why some things can't be sold.</li>
-          <li><b>✌️ Double mutations</b>: once in a while, food mutates twice.</li>
-          <li><b>🍀 Easier top tiers</b>: legendary, mythic, divine and eternal foods all show up more often.</li>
+          <li><b>📊 Stats</b>: a new button at the bottom shows your time played, best finds, coins and rolls by tier.</li>
+          <li><b>🎁 Mystery Box</b> in the Shop: a random prize every time. Some are very good.</li>
+          <li><b>🐛 Fixes</b>: two guaranteed mutations now work together instead of one replacing the other, and minigames pause during cutscenes.</li>
         </ul>
       </div>
       <ul class="help-list">
@@ -279,6 +277,24 @@
         <button type="button" id="eatTipTry" class="primary">Turn on Auto eat</button>
         <button type="button" id="eatTipClose">Later</button>
       </div>
+    </div>
+  </div>
+
+  <div id="statsModal" class="modal">
+    <div class="modal-box help-box">
+      <h2>📊 Stats</h2>
+      <div id="statsPage"></div>
+      <div class="modal-buttons"><button type="button" id="statsClose" class="primary">Close</button></div>
+    </div>
+  </div>
+
+  <!-- What came out of a Mystery Box -->
+  <div id="boxModal" class="modal">
+    <div class="modal-box clue-box">
+      <h2>🎁 Mystery Box</h2>
+      <p class="setting-note">You open the box and find...</p>
+      <p id="boxPrize" class="box-prize"></p>
+      <div class="modal-buttons"><button type="button" id="boxClose" class="primary">Nice!</button></div>
     </div>
   </div>
 

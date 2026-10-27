@@ -652,7 +652,7 @@ const CODES = {
   NOLEM:  { text: 'The melon splits open. Not a single seed inside.', only: () => huntStep('cipher') === 1, then: () => finishHunt('cipher') },
 };
 
-const GAME_VERSION = '1.0'; // bump it and update "What's new" in index.html, and players see How to play once more
+const GAME_VERSION = '1.1'; // bump it and update "What's new" in index.html, and players see How to play once more
 const AUTO_ROLL_AFTER = 15; // rolls by hand before auto roll shows up
 const BACKUP_TIP_AFTER = 1800; // seconds of play before the "back up your save" tip
 const EAT_TIP_AFTER = 30; // rolls without eating anything before the "eat food for luck" tip
@@ -670,6 +670,7 @@ const save = Object.assign({
   rolls: 0, inv: {}, found: {}, mutCount: {}, buffs: [], perm: 0, codes: [], breadEaten: 0, totalEaten: 0,
   best: null, triggers: {}, streak: { id: null, count: 0 }, settings: {},
   charges: { lucky: 0, floor: null, muts: [] }, cooked: {}, recipesUnlocked: {}, cookFails: 0, picked: {}, glazedDonuts: 0, pot: {}, clues: {}, treasure: 0, coins: 0, coinsEarned: 0, scrapsBought: 0, favs: {}, sizes: {}, biggest: {}, smallest: 1, itemsSold: 0, mushMade: 0, mushStreak: 0, hunts: {}, huntRoots: 0, shopBought: {}, upgrades: {}, themes: { classic: true },
+  tierRolls: {}, boxesOpened: 0,
 }, load());
 save.settings = Object.assign({ autoEat: 'off', sound: true, music: true, deleteBelow: 0, luckCap: 0, theme: 'classic', cutsceneOdds: CUTSCENE_ODDS }, save.settings);
 // The default used to be 1 in 1,000,000. Saves still on that move to the new default once.
@@ -1198,6 +1199,7 @@ async function roll(auto = false) {
 
   const size = rollSize();
   give(key, copies, size);
+  save.tierRolls[food.tier] = (save.tierRolls[food.tier] || 0) + copies; // for the Stats page
   const tierNum = TIER_ORDER.indexOf(food.tier);
   dailyAdd('roll');
   dailyAdd('variety', food.id);
@@ -2592,7 +2594,8 @@ const POWERUPS = [
   { id: 'mutspray', icon: '🧪', name: 'Mutation Spray', desc: 'Your next roll gets a random mutation', base: 400,
     buy: () => { save.charges.anyMut = (save.charges.anyMut || 0) + 1; } },
   { id: 'goldseason', icon: '🧂', name: 'Golden Seasoning', desc: 'Next 5 rolls are Golden', base: 1500, buy: () => addMutCharge('golden', 5) },
-  { id: 'crate', icon: '📦', name: 'Ingredient Crate', desc: '12 random common and uncommon foods', base: 150, flat: true, buy: openCrate },
+  { id: 'crate', icon: '📦', name: 'Ingredient Crate', desc: '12 random common and uncommon foods', base: 150, flat: true, quiet: true, buy: openCrate },
+  { id: 'mysterybox', icon: '🎁', name: 'Mystery Box', desc: 'A random prize: coins, food, power-ups... or something big', base: 750, flat: true, quiet: true, buy: openMysteryBox },
 ];
 const powerupPrice = p => p.flat ? p.base : Math.round(p.base * 2 ** (save.shopBought[p.id] || 0));
 
@@ -2613,6 +2616,37 @@ function openCrate() {
   for (const [id, n] of Object.entries(got)) give(id, n);
   toast('Crate: ' + Object.entries(got).map(([id, n]) => `${n}x ${FOOD[id].name}`).join(', '), TIERS.uncommon.color);
 }
+
+// Mystery Box prizes. weight = how often a prize comes up: a prize with weight 20 shows up
+// twice as often as one with weight 10. To add a prize, copy a line and change it.
+const MYSTERY_PRIZES = [
+  { icon: '🪙', name: '500 coins', weight: 30, give: () => { save.coins += 500; } },
+  { icon: '🍀', name: '10 Lucky Rolls', weight: 15, give: () => { save.charges.lucky += 10; } },
+  { icon: '🔷', name: '3 random Rare foods', weight: 20, give: () => giveRandomFood('rare', 3) },
+  { icon: '📜', name: 'A recipe scrap', weight: 12, give: () => findScrap() || (save.coins += 750) }, // all scraps found: coins back
+  { icon: '🧂', name: '5 Golden rolls', weight: 10, give: () => addMutCharge('golden', 5) },
+  { icon: '🟣', name: 'A random Epic food', weight: 8, give: () => giveRandomFood('epic', 1) },
+  { icon: '💰', name: '2,000 coins', weight: 4, give: () => { save.coins += 2000; } },
+  { icon: '🌟', name: 'A random Legendary food!', weight: 1.5, give: () => giveRandomFood('legendary', 1) },
+  { icon: '🎰', name: 'JACKPOT! 10,000 coins!', weight: 0.5, give: () => { save.coins += 10000; } },
+];
+
+// Gives n random foods of one tier (never event foods)
+function giveRandomFood(tier, n) {
+  const pool = NORMAL_FOODS.filter(f => f.tier === tier);
+  for (let i = 0; i < n; i++) give(pool[Math.floor(Math.random() * pool.length)].id);
+}
+
+function openMysteryBox() {
+  let r = Math.random() * MYSTERY_PRIZES.reduce((sum, p) => sum + p.weight, 0);
+  const prize = MYSTERY_PRIZES.find(p => (r -= p.weight) <= 0) || MYSTERY_PRIZES[0];
+  prize.give();
+  save.boxesOpened++;
+  $('boxPrize').textContent = `${prize.icon} ${prize.name}`;
+  $('boxModal').classList.add('show');
+  renderAll();
+}
+$('boxClose').addEventListener('click', () => $('boxModal').classList.remove('show'));
 
 // Upgrades are permanent and have levels
 const UPGRADES = [
@@ -3036,7 +3070,7 @@ el.shop.addEventListener('pointerdown', e => {
     if (p.buy() === false) return;
     save.coins -= price;
     save.shopBought[p.id] = (save.shopBought[p.id] || 0) + 1;
-    if (p.id !== 'crate') toast(`Bought ${p.name}`, '#7dff9a');
+    if (!p.quiet) toast(`Bought ${p.name}`, '#7dff9a');
     sfx.chime();
   } else if ('upgrade' in btn.dataset) {
     const u = UPGRADES.find(x => x.id === btn.dataset.upgrade);
@@ -3276,6 +3310,59 @@ function checkBackupTip() {
 }
 
 // Settings: open to everyone from the start
+// ---------- Stats page ----------
+function playTimeText(s) {
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return h ? `${fmt(h)}h ${m}m` : `${m}m`;
+}
+
+function renderStatsPage() {
+  const biggest = Object.entries(save.biggest).sort((a, b) => b[1] - a[1])[0];
+  const sections = [
+    ['🎲 Playing', [
+      ['Time played', playTimeText(save.playTime || 0)],
+      ['Rolls', fmt(save.rolls)],
+      ['Food eaten', fmt(save.totalEaten)],
+      ['Meals cooked', fmt(totalCooked())],
+      ['Pot Mush made', fmt(save.mushMade)],
+      ['Daily challenges done', fmt(save.dailiesDone || 0)],
+      ['Daily streak', `${fmt(save.dailyStreak || 0)} days`],
+    ]],
+    ['🔍 Finds', [
+      ['Best find', save.best ? `${emojiHtml(save.best)} ${nameOf(save.best)}<div class="best-odds">${oddsText(save.best)}</div>` : '-'],
+      ['Foods found', `${NORMAL_FOODS.filter(f => save.found[f.id]).length} / ${NORMAL_FOODS.length}`],
+      ['Mutations found', `${REGULAR_MUTS.filter(m => save.mutCount[m.id]).length} / ${REGULAR_MUTS.length}`],
+      ['Double mutations rolled', fmt(save.doubles || 0)],
+      ['Secrets found', `${SECRETS.filter(f => save.found[f.id]).length} / ${SECRETS.length}`],
+      ['Biggest food', biggest ? `${emojiHtml(biggest[0])} ${FOOD[biggest[0]].name} ${biggest[1].toFixed(2)}x` : '-'],
+      ['Smallest size', save.smallest < 1 ? `${save.smallest.toFixed(2)}x` : '-'],
+    ]],
+    ['🪙 Coins', [
+      ['Coins now', fmt(save.coins)],
+      ['Coins from selling', fmt(save.coinsEarned)],
+      ['Food sold', fmt(save.itemsSold)],
+      ['Recipe scraps bought', fmt(save.scrapsBought)],
+      ['Mystery Boxes opened', fmt(save.boxesOpened)],
+    ]],
+  ];
+  // Rolls per tier as bars. Only counted since this page was added, so older saves start at 0.
+  const tiers = TIER_ORDER.filter(t => !['secret', 'meal'].includes(t));
+  const most = Math.max(1, ...tiers.map(t => save.tierRolls[t] || 0));
+  const bars = tiers.map(t => {
+    const n = save.tierRolls[t] || 0;
+    return `<div class="tier-bar" style="--c:${TIERS[t].color}">
+      <span class="tb-name">${TIERS[t].label}</span>
+      <span class="tb-track"><span class="tb-fill" style="width:${n ? Math.max(1, n / most * 100) : 0}%"></span></span>
+      <span class="tb-count">${fmt(n)}</span>
+    </div>`;
+  }).join('');
+  $('statsPage').innerHTML = sections.map(([title, rows]) =>
+    `<h3 class="r-head">${title}</h3><dl class="stats">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`).join('') +
+    `<h3 class="r-head">📊 Rolls by tier</h3>${bars}<p class="setting-note">Counted since v1.1, so rolls from before then aren't in the bars.</p>`;
+}
+$('statsBtn').addEventListener('click', () => { renderStatsPage(); $('statsModal').classList.add('show'); });
+$('statsClose').addEventListener('click', () => $('statsModal').classList.remove('show'));
+
 $('settingsBtn').addEventListener('click', () => $('settingsModal').classList.add('show'));
 $('settingsClose').addEventListener('click', () => $('settingsModal').classList.remove('show'));
 $('cutsceneOdds').value = String(save.settings.cutsceneOdds);
