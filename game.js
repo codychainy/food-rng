@@ -286,6 +286,8 @@ const FOODS = [
   { id: 'donuttower', name: 'Donut Tower', emoji: '🗼', img: 'donut', tier: 'secret', perm: 0.3,
     filter: 'sepia(1) saturate(4) brightness(1.1) drop-shadow(0 0 16px #ffd700)',
     hint: 'Stack the sticky ones.' },
+ { id: 'boxsecret', name: 'Box of Surprises', emoji: '🎁', img: 'cupcake', tier: 'secret', perm: 0.2,
+    hint: 'Some prizes come wrapped twice.' },
 
   // Halloween event: these only roll while the event is on (see EVENTS)
   ...spooky('uncommon', [
@@ -612,6 +614,7 @@ const SCENES = {
   doubleglaze: { bg: 'radial-gradient(circle, #ffcf8a, #8a4b12 45%, #1f0f02 80%)', color: '#ffb86b', fx: 'rings', p: '🍯 🍩 ✨', motion: 'fall' },
   sugarrush: { bg: 'conic-gradient(from 0deg, #ff66cc, #ffe600, #7df9ff, #ff66cc)', color: '#ffffff', fx: 'rays', p: '🍬 🍭 🍩 ⚡', motion: 'burst' },
   donuttower: { bg: 'linear-gradient(#ffb86b, #6b2d00)', color: '#ffd700', fx: 'beams', p: '🍩 🍯', motion: 'rise' },
+boxsecret: { bg: 'linear-gradient(#ff4d6d, #3a0a14)', color: '#ffd700', fx: 'rays', p: '🎁 🎉 ✨', motion: 'burst' },
   seedless: { bg: 'radial-gradient(circle, #ff5c7a 0 14%, #8a1f35 40%, #12040a 80%)', color: '#ffd1da', fx: 'scan', p: '🍉 🔤 ✨', motion: 'fall' },
   seedvault: { bg: 'radial-gradient(circle at 50% 70%, #3f7a12, #102605 45%, #020600)', color: '#b6ff8a', fx: 'beams', p: '🌱 🗺️ 🧩', motion: 'rise' },
   phantommelon: { bg: 'radial-gradient(circle, #c8d6ff22 0 10%, #1b263b 45%, #000 85%)', color: '#c8d6ff', fx: 'stars', p: '👻 🍉 🌱', motion: 'drift' },
@@ -2623,12 +2626,13 @@ const MYSTERY_PRIZES = [
   { icon: '🪙', name: '500 coins', weight: 30, give: () => { save.coins += 500; } },
   { icon: '🍀', name: '10 Lucky Rolls', weight: 15, give: () => { save.charges.lucky += 10; } },
   { icon: '🔷', name: '3 random Rare foods', weight: 20, give: () => giveRandomFood('rare', 3) },
+  { icon: '🎁', name: 'Box of Surprises', weight: 0.5, give: () => save.triggers.boxsecret ? (save.coins += 750) : unlockSecret('boxsecret') },
   { icon: '📜', name: 'A recipe scrap', weight: 12, give: () => findScrap() || (save.coins += 750) }, // all scraps found: coins back
   { icon: '🧂', name: '5 Golden rolls', weight: 10, give: () => addMutCharge('golden', 5) },
   { icon: '🟣', name: 'A random Epic food', weight: 8, give: () => giveRandomFood('epic', 1) },
   { icon: '💰', name: '2,000 coins', weight: 4, give: () => { save.coins += 2000; } },
   { icon: '🌟', name: 'A random Legendary food!', weight: 1.5, give: () => giveRandomFood('legendary', 1) },
-  { icon: '🎰', name: 'JACKPOT! 10,000 coins!', weight: 0.5, give: () => { save.coins += 10000; } },
+  { icon: '🎰', name: 'JACKPOT! 10,000 coins!', weight: 1, give: () => { save.coins += 10000; } },
 ];
 
 // Gives n random foods of one tier (never event foods)
@@ -2871,7 +2875,8 @@ const SECRET_HOW = {
   midnightsoup: 'Roll it between midnight and 1 AM. It shows up 1 in 500 during that hour.',
   clover: 'Your 777th roll is always this.',
   codepie: 'Redeem the code CHEF.',
-  crownbread: 'Eat 10 Bread.',
+  crownbread: 'Eat 10 Bread.',	
+	
   goldenspoon: "Don't touch anything for 2 minutes.",
   upsidecake: 'Double-click the roll card 3 times to flip it.',
   emptyplate: 'Empty your whole inventory after at least 50 rolls.',
@@ -2881,6 +2886,7 @@ const SECRET_HOW = {
   doubleglaze: 'Roll a Glazed Donut.',
   sugarrush: 'Eat a Glazed Donut.',
   donuttower: 'Roll 3 Glazed Donuts in total.',
+  boxsecret: 'Get lucky with a Mystery Box.',
   treasure: 'Eat an Oyster Pearl → cook one Coconut on its own → redeem ARRR → press X (or tap ✖️) 10 times.',
   molestash: 'Eat 10 Potatoes, Carrots or Onions → scroll down the tunnel below the page → win Whack-a-Mole.',
   chefslockbox: 'Cook a Breakfast Plate → open the safe under the pot (memory game) → redeem 2009.',
