@@ -286,6 +286,8 @@ const FOODS = [
   { id: 'donuttower', name: 'Donut Tower', emoji: '🗼', img: 'donut', tier: 'secret', perm: 0.3,
     filter: 'sepia(1) saturate(4) brightness(1.1) drop-shadow(0 0 16px #ffd700)',
     hint: 'Stack the sticky ones.' },
+ { id: 'boxsecret', name: 'Box of Surprises', emoji: '🎁', img: 'cupcake', tier: 'secret', perm: 0.2,
+    hint: 'Some prizes come wrapped twice.' },
 
   // Halloween event: these only roll while the event is on (see EVENTS)
   ...spooky('uncommon', [
@@ -383,6 +385,8 @@ const MEALS = [
     clue: 'Little folded parcels, steamed. Cool green slices on the side.' },
   { id: 'riceball', name: 'Lucky Rice Ball', emoji: '🍙', needs: { bento: 1, fortune: 1, rice: 2 }, floor: { tier: 'rare', rolls: 5 },
     clue: 'A packed lunch box, a cookie with a message inside, a little plain grain.' },
+  { id: 'doubleburger', name: 'Double Cheeseburger', emoji: '🍔', needs: { bread: 2, cheese: 2, tomato: 1, lettuce: 1, steak: 1  }, luck: 1, time: 240, luckyRolls: 5,
+    clue: '2 grainy slabs, a few slices of fromage, a red bulb, a bundle of green, and a meaty block.' },
 
   // Secret recipes: their scrap only turns up once unlock() is true. An ingredient like 'pizza:golden' needs that exact mutation.
   // forceMut = the next N rolls get that mutation, surprise = a random meal's power.
@@ -612,6 +616,7 @@ const SCENES = {
   doubleglaze: { bg: 'radial-gradient(circle, #ffcf8a, #8a4b12 45%, #1f0f02 80%)', color: '#ffb86b', fx: 'rings', p: '🍯 🍩 ✨', motion: 'fall' },
   sugarrush: { bg: 'conic-gradient(from 0deg, #ff66cc, #ffe600, #7df9ff, #ff66cc)', color: '#ffffff', fx: 'rays', p: '🍬 🍭 🍩 ⚡', motion: 'burst' },
   donuttower: { bg: 'linear-gradient(#ffb86b, #6b2d00)', color: '#ffd700', fx: 'beams', p: '🍩 🍯', motion: 'rise' },
+boxsecret: { bg: 'linear-gradient(#ff4d6d, #3a0a14)', color: '#ffd700', fx: 'rays', p: '🎁 🎉 ✨', motion: 'burst' },
   seedless: { bg: 'radial-gradient(circle, #ff5c7a 0 14%, #8a1f35 40%, #12040a 80%)', color: '#ffd1da', fx: 'scan', p: '🍉 🔤 ✨', motion: 'fall' },
   seedvault: { bg: 'radial-gradient(circle at 50% 70%, #3f7a12, #102605 45%, #020600)', color: '#b6ff8a', fx: 'beams', p: '🌱 🗺️ 🧩', motion: 'rise' },
   phantommelon: { bg: 'radial-gradient(circle, #c8d6ff22 0 10%, #1b263b 45%, #000 85%)', color: '#c8d6ff', fx: 'stars', p: '👻 🍉 🌱', motion: 'drift' },
@@ -652,7 +657,7 @@ const CODES = {
   NOLEM:  { text: 'The melon splits open. Not a single seed inside.', only: () => huntStep('cipher') === 1, then: () => finishHunt('cipher') },
 };
 
-const GAME_VERSION = '1.0'; // bump it and update "What's new" in index.html, and players see How to play once more
+const GAME_VERSION = '1.1'; // bump it and update "What's new" in index.html, and players see How to play once more
 const AUTO_ROLL_AFTER = 15; // rolls by hand before auto roll shows up
 const BACKUP_TIP_AFTER = 1800; // seconds of play before the "back up your save" tip
 const EAT_TIP_AFTER = 30; // rolls without eating anything before the "eat food for luck" tip
@@ -669,7 +674,8 @@ const SAVE_KEY = window.PROFILE ? PROFILE.saveKey : 'foodRngSave';
 const save = Object.assign({
   rolls: 0, inv: {}, found: {}, mutCount: {}, buffs: [], perm: 0, codes: [], breadEaten: 0, totalEaten: 0,
   best: null, triggers: {}, streak: { id: null, count: 0 }, settings: {},
-  charges: { lucky: 0, floor: null, mut: null }, cooked: {}, recipesUnlocked: {}, cookFails: 0, picked: {}, glazedDonuts: 0, pot: {}, clues: {}, treasure: 0, coins: 0, coinsEarned: 0, scrapsBought: 0, favs: {}, sizes: {}, biggest: {}, smallest: 1, itemsSold: 0, mushMade: 0, mushStreak: 0, hunts: {}, huntRoots: 0, shopBought: {}, upgrades: {}, themes: { classic: true },
+  charges: { lucky: 0, floor: null, muts: [] }, cooked: {}, recipesUnlocked: {}, cookFails: 0, picked: {}, glazedDonuts: 0, pot: {}, clues: {}, treasure: 0, coins: 0, coinsEarned: 0, scrapsBought: 0, favs: {}, sizes: {}, biggest: {}, smallest: 1, itemsSold: 0, mushMade: 0, mushStreak: 0, hunts: {}, huntRoots: 0, shopBought: {}, upgrades: {}, themes: { classic: true },
+  tierRolls: {}, boxesOpened: 0,
 }, load());
 save.settings = Object.assign({ autoEat: 'off', sound: true, music: true, deleteBelow: 0, luckCap: 0, theme: 'classic', cutsceneOdds: CUTSCENE_ODDS }, save.settings);
 // The default used to be 1 in 1,000,000. Saves still on that move to the new default once.
@@ -678,6 +684,10 @@ if (!save.settings.csOddsMoved) {
   save.settings.csOddsMoved = true;
 }
 save.upgrades = Object.assign({ eye: 0, pot: 0 }, save.upgrades);
+// Guaranteed mutations used to be one slot (charges.mut), so a new one wiped out the old one. Now they are a list.
+if (!save.charges.muts) save.charges.muts = save.charges.mut ? [save.charges.mut] : [];
+delete save.charges.mut;
+save.charges.muts = save.charges.muts.filter(c => MUT[c.id] && c.rolls > 0);
 
 function load() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) { return {}; }
@@ -1158,11 +1168,15 @@ async function roll(auto = false) {
     minChance = FLOOR_CHANCE[floor.tier];
     if (--floor.rolls <= 0) save.charges.floor = null;
   }
+  // Guaranteed mutations: with two different ones waiting, every roll gets both (a double mutation).
+  // A third one waits its turn.
   let forcedMut = null;
-  const mutCharge = save.charges.mut;
-  if (mutCharge) {
-    forcedMut = MUT[mutCharge.id];
-    if (--mutCharge.rolls <= 0) save.charges.mut = null;
+  const mutCharges = save.charges.muts.slice(0, 2);
+  if (mutCharges.length) {
+    const [a, b] = mutCharges.map(c => MUT[c.id]);
+    forcedMut = b ? doubleOf(a, b) : a;
+    for (const c of mutCharges) c.rolls--;
+    save.charges.muts = save.charges.muts.filter(c => c.rolls > 0);
   }
   if (!forcedMut && save.charges.anyMut > 0) {
     save.charges.anyMut--;
@@ -1172,7 +1186,7 @@ async function roll(auto = false) {
   const luck = rollLuck(lucky);
   const food = save.rolls === 777 ? FOOD.clover : pickFood(luck, minChance);
   let mut = forcedMut || pickMutation(luck);
-  // Rarely a second mutation lands on top (see DOUBLE_GATE). Forced mutations stay single.
+  // Rarely a second mutation lands on top (see DOUBLE_GATE). Forced mutations don't get a random extra one.
   if (mut && !forcedMut && Math.random() < 1 / DOUBLE_GATE) {
     const second = pickMutation(luck);
     if (second && second !== mut) mut = doubleOf(mut, second);
@@ -1190,6 +1204,7 @@ async function roll(auto = false) {
 
   const size = rollSize();
   give(key, copies, size);
+  save.tierRolls[food.tier] = (save.tierRolls[food.tier] || 0) + copies; // for the Stats page
   const tierNum = TIER_ORDER.indexOf(food.tier);
   dailyAdd('roll');
   dailyAdd('variety', food.id);
@@ -1364,6 +1379,13 @@ function eat(key, silent = false) {
   return true;
 }
 
+// The next N rolls get this mutation. The same mutation again adds more rolls; a different one joins the list.
+function addMutCharge(id, rolls) {
+  const c = save.charges.muts.find(x => x.id === id);
+  if (c) c.rolls += rolls;
+  else save.charges.muts.push({ id, rolls });
+}
+
 // Gives the power of a food or meal. A meal can have several kinds of power at once.
 function applyEffect(key, silent = false) {
   const { food } = parseKey(key);
@@ -1391,9 +1413,7 @@ function applyEffect(key, silent = false) {
     if (!silent) toast(`${food.name}: next rolls are at least ${TIERS[e.floor.tier].label}!`, color);
   }
   if (e.forceMut) {
-    const f = save.charges.mut;
-    if (f && f.id === e.forceMut.id) f.rolls += e.forceMut.rolls;
-    else save.charges.mut = { ...e.forceMut };
+    addMutCharge(e.forceMut.id, e.forceMut.rolls);
     if (!silent) toast(`${food.name}: next rolls are ${MUT[e.forceMut.id].name}!`, MUT[e.forceMut.id].color);
   }
   if (e.time && (e.luck || e.speed || e.mutBoost || e.double)) {
@@ -1666,18 +1686,30 @@ async function openSafe() {
 }
 
 // ---------- Minigames ----------
-// setup(area, info, finish, timers) builds the game. finish(true/false) ends it; timers are cleared then.
+// setup(area, info, finish, every) builds the game. finish(true/false) ends it.
+// every(fn, ms) is a repeating timer that waits while a cutscene covers the screen, so the game
+// pauses and carries on after. setup can return { pause, resume } for anything else that must stop.
 let endMinigame = null;
 function openMinigame(title, setup) {
   return new Promise(resolve => {
     const area = $('mgArea');
     const timers = [];
     let done = false;
+    let paused = false;
+    let hooks = null;
     const info = text => { $('mgInfo').textContent = text; };
+    const every = (fn, ms) => timers.push(setInterval(() => { if (!paused) fn(); }, ms));
+    timers.push(setInterval(() => {
+      if (paused === cutscenePlaying) return;
+      paused = cutscenePlaying;
+      area.classList.toggle('paused', paused);
+      if (hooks) (paused ? hooks.pause : hooks.resume)();
+    }, 100));
     const finish = win => {
       if (done) return;
       done = true;
       timers.forEach(clearTimeout); // also clears intervals
+      if (hooks) hooks.pause(); // the game's own timers too (Give up)
       area.onpointerdown = null;
       setTimeout(() => $('mgModal').classList.remove('show'), win ? 600 : 0);
       if (win) sfx.chime();
@@ -1686,14 +1718,15 @@ function openMinigame(title, setup) {
     endMinigame = () => finish(false);
     $('mgTitle').textContent = title;
     area.innerHTML = '';
+    area.classList.remove('paused');
     $('mgModal').classList.add('show');
-    setup(area, info, finish, timers);
+    hooks = setup(area, info, finish, every) || null;
   });
 }
 $('mgClose').addEventListener('click', () => endMinigame && endMinigame());
 
 function whackAMole() {
-  return openMinigame('Whack-a-Mole', (area, info, finish, timers) => {
+  return openMinigame('Whack-a-Mole', (area, info, finish, every) => {
     const GOAL = 12;
     area.className = 'mg-area mg-grid';
     area.innerHTML = Array.from({ length: 9 }, (_, i) => `<button class="mg-hole" data-i="${i}"></button>`).join('');
@@ -1714,21 +1747,24 @@ function whackAMole() {
       if (++hits >= GOAL) finish(true);
       status();
     };
-    timers.push(setInterval(pop, 750));
-    timers.push(setInterval(() => { left--; status(); if (left <= 0) finish(false); }, 1000));
+    every(pop, 750);
+    every(() => { left--; status(); if (left <= 0) finish(false); }, 1000);
     pop();
     status();
   });
 }
 
 function memoryGame() {
-  return openMinigame('The Safe', (area, info, finish, timers) => {
+  return openMinigame('The Safe', (area, info, end) => {
     const LENGTHS = [4, 5, 6];
     area.className = 'mg-area mg-simon';
     area.innerHTML = ['pizza', 'donut', 'sushi', 'apple'].map((id, i) => `<button class="mg-pad" data-i="${i}">${imgTag(FOOD[id], true)}</button>`).join('');
     const pads = [...area.children];
     const seq = [];
     let round = 0, pos = 0, listening = false;
+    let timers = [];
+    const stopTimers = () => { timers.forEach(clearTimeout); timers = []; pads.forEach(p => p.classList.remove('lit')); };
+    const finish = win => { stopTimers(); end(win); };
     const flashPad = (p, at, ms) => {
       timers.push(setTimeout(() => { pads[p].classList.add('lit'); sfx.tick(); }, at));
       timers.push(setTimeout(() => pads[p].classList.remove('lit'), at + ms));
@@ -1759,6 +1795,8 @@ function memoryGame() {
       }
     };
     play();
+    // A cutscene in the middle: stop, then show this lock's order again from the start
+    return { pause: stopTimers, resume: play };
   });
 }
 
@@ -2097,16 +2135,16 @@ function renderBuffs() {
       <span class="b-info">Mutation Spray<div class="b-effect">random mutation</div></span>
       <span class="b-time">${save.charges.anyMut} left</span></li>`);
   }
-  const mc = save.charges.mut;
-  if (mc) {
+  save.charges.muts.forEach((mc, i) => {
     const m = MUT[mc.id];
     items.push(`<li style="--c:${m.color}"><span class="b-emoji">${m.icon}</span>
-      <span class="b-info">${m.name} rolls<div class="b-effect">guaranteed mutation</div></span>
+      <span class="b-info">${m.name} rolls<div class="b-effect">${i < 2 ? 'guaranteed mutation' : 'waiting for a free spot'}</div></span>
       <span class="b-time">${mc.rolls} left</span></li>`);
-  }
+  });
   el.charges.innerHTML = items.join('') || (save.buffs.length ? '' : '<li class="empty">Eat food to get buffs!</li>');
 
-  // Food buffs live in a dropdown with a one-line summary, strongest first.
+  // Food buffs live in a dropdown with a one-line summary, rarest tier first (secrets, then meals, then Eternal
+  // down to Common), and inside a tier the rarest 1 in X first.
   // Each shows what it actually adds right now (the 2nd strongest counts half, and so on).
   el.buffBox.hidden = !save.buffs.length;
   if (!save.buffs.length) return;
@@ -2114,7 +2152,8 @@ function renderBuffs() {
   const speed = new Map(rankedBuffs('speed').map(x => [x.key, x.counted]));
   const shown = (full, counted) => counted < full - 0.005 ? `${pct(full)} (counts ${pct(counted)})` : pct(full);
   el.buffSummary.innerHTML = `${save.buffs.length} buff${save.buffs.length > 1 ? 's' : ''} · <b>${pct(buffTotal('luck'))}</b> luck · <b>${pct(buffTotal('speed'))}</b> speed`;
-  const sorted = [...save.buffs].sort((a, b) => (luck.get(b.key) || 0) - (luck.get(a.key) || 0) || (speed.get(b.key) || 0) - (speed.get(a.key) || 0));
+  const tierRank = key => ({ secret: 99, meal: 98 })[parseKey(key).food.tier] ?? TIER_ORDER.indexOf(parseKey(key).food.tier);
+  const sorted = [...save.buffs].sort((a, b) => tierRank(b.key) - tierRank(a.key) || rarity(b.key) - rarity(a.key));
   el.buffs.innerHTML = sorted.map(b => {
     const { food, mut } = parseKey(b.key);
     const e = effectOf(b.key);
@@ -2561,13 +2600,9 @@ const POWERUPS = [
   { id: 'epicticket', icon: '🎫', name: 'Epic Ticket', desc: 'Next 3 rolls are at least Epic', base: 2500, buy: () => addFloor('epic') },
   { id: 'mutspray', icon: '🧪', name: 'Mutation Spray', desc: 'Your next roll gets a random mutation', base: 400,
     buy: () => { save.charges.anyMut = (save.charges.anyMut || 0) + 1; } },
-  { id: 'goldseason', icon: '🧂', name: 'Golden Seasoning', desc: 'Next 5 rolls are Golden', base: 1500, buy: () => {
-    const m = save.charges.mut;
-    if (m && m.id !== 'golden') return toast(`Wait until your ${MUT[m.id].name} rolls run out.`, '#ff8080'), false;
-    if (m) m.rolls += 5;
-    else save.charges.mut = { id: 'golden', rolls: 5 };
-  } },
-  { id: 'crate', icon: '📦', name: 'Ingredient Crate', desc: '12 random common and uncommon foods', base: 150, flat: true, buy: openCrate },
+  { id: 'goldseason', icon: '🧂', name: 'Golden Seasoning', desc: 'Next 5 rolls are Golden', base: 1500, buy: () => addMutCharge('golden', 5) },
+  { id: 'crate', icon: '📦', name: 'Ingredient Crate', desc: '12 random common and uncommon foods', base: 150, flat: true, quiet: true, buy: openCrate },
+  { id: 'mysterybox', icon: '🎁', name: 'Mystery Box', desc: 'A random prize: coins, food, power-ups... or something big', base: 750, flat: true, quiet: true, buy: openMysteryBox },
 ];
 const powerupPrice = p => p.flat ? p.base : Math.round(p.base * 2 ** (save.shopBought[p.id] || 0));
 
@@ -2588,6 +2623,38 @@ function openCrate() {
   for (const [id, n] of Object.entries(got)) give(id, n);
   toast('Crate: ' + Object.entries(got).map(([id, n]) => `${n}x ${FOOD[id].name}`).join(', '), TIERS.uncommon.color);
 }
+
+// Mystery Box prizes. weight = how often a prize comes up: a prize with weight 20 shows up
+// twice as often as one with weight 10. To add a prize, copy a line and change it.
+const MYSTERY_PRIZES = [
+  { icon: '🪙', name: '500 coins', weight: 30, give: () => { save.coins += 500; } },
+  { icon: '🍀', name: '10 Lucky Rolls', weight: 15, give: () => { save.charges.lucky += 10; } },
+  { icon: '🔷', name: '3 random Rare foods', weight: 20, give: () => giveRandomFood('rare', 3) },
+  { icon: '🎁', name: 'Box of Surprises', weight: 0.5, give: () => save.triggers.boxsecret ? (save.coins += 750) : unlockSecret('boxsecret') },
+  { icon: '📜', name: 'A recipe scrap', weight: 12, give: () => findScrap() || (save.coins += 750) }, // all scraps found: coins back
+  { icon: '🧂', name: '5 Golden rolls', weight: 10, give: () => addMutCharge('golden', 5) },
+  { icon: '🟣', name: 'A random Epic food', weight: 8, give: () => giveRandomFood('epic', 1) },
+  { icon: '💰', name: '2,000 coins', weight: 4, give: () => { save.coins += 2000; } },
+  { icon: '🌟', name: 'A random Legendary food!', weight: 1.5, give: () => giveRandomFood('legendary', 1) },
+  { icon: '🎰', name: 'JACKPOT! 10,000 coins!', weight: 1, give: () => { save.coins += 10000; } },
+];
+
+// Gives n random foods of one tier (never event foods)
+function giveRandomFood(tier, n) {
+  const pool = NORMAL_FOODS.filter(f => f.tier === tier);
+  for (let i = 0; i < n; i++) give(pool[Math.floor(Math.random() * pool.length)].id);
+}
+
+function openMysteryBox() {
+  let r = Math.random() * MYSTERY_PRIZES.reduce((sum, p) => sum + p.weight, 0);
+  const prize = MYSTERY_PRIZES.find(p => (r -= p.weight) <= 0) || MYSTERY_PRIZES[0];
+  prize.give();
+  save.boxesOpened++;
+  $('boxPrize').textContent = `${prize.icon} ${prize.name}`;
+  $('boxModal').classList.add('show');
+  renderAll();
+}
+$('boxClose').addEventListener('click', () => $('boxModal').classList.remove('show'));
 
 // Upgrades are permanent and have levels
 const UPGRADES = [
@@ -2741,7 +2808,7 @@ function renderInventory() {
       <span class="r-emoji">${emojiHtml(key)}</span>
       <span class="r-info">
         <div class="r-name ${nameClass(food)}">${mut ? tagHtml(mut) + ' ' : ''}${food.name} <span class="r-count">x${save.inv[key]}</span></div>
-        <div class="r-sub">${effectText(key)}${sizeOf(key) !== 1 ? ` · ${sizeOf(key).toFixed(2)}x size` : ''} ${active ? '<span class="active-tag">· active</span>' : ''}</div>
+        <div class="r-sub">${oddsText(key)} · ${effectText(key)}${sizeOf(key) !== 1 ? ` · ${sizeOf(key).toFixed(2)}x size` : ''} ${active ? '<span class="active-tag">· active</span>' : ''}</div>
       </span>
       <button data-fav="${key}" class="pick fav ${save.favs[key] ? 'on' : ''}" title="${save.favs[key] ? 'Unfavorite' : 'Favorite: never sold, auto eaten or auto deleted'}">⭐</button>
       <button data-pick="${key}" class="pick ${picked ? 'on' : ''}" title="${picked ? 'Unpick' : 'Pick for auto eat (Picked foods mode)'}">🍴</button>
@@ -2812,7 +2879,8 @@ const SECRET_HOW = {
   midnightsoup: 'Roll it between midnight and 1 AM. It shows up 1 in 500 during that hour.',
   clover: 'Your 777th roll is always this.',
   codepie: 'Redeem the code CHEF.',
-  crownbread: 'Eat 10 Bread.',
+  crownbread: 'Eat 10 Bread.',	
+	
   goldenspoon: "Don't touch anything for 2 minutes.",
   upsidecake: 'Double-click the roll card 3 times to flip it.',
   emptyplate: 'Empty your whole inventory after at least 50 rolls.',
@@ -2822,6 +2890,7 @@ const SECRET_HOW = {
   doubleglaze: 'Roll a Glazed Donut.',
   sugarrush: 'Eat a Glazed Donut.',
   donuttower: 'Roll 3 Glazed Donuts in total.',
+  boxsecret: 'Get lucky with a Mystery Box.',
   treasure: 'Eat an Oyster Pearl → cook one Coconut on its own → redeem ARRR → press X (or tap ✖️) 10 times.',
   molestash: 'Eat 10 Potatoes, Carrots or Onions → scroll down the tunnel below the page → win Whack-a-Mole.',
   chefslockbox: 'Cook a Breakfast Plate → open the safe under the pot (memory game) → redeem 2009.',
@@ -3011,7 +3080,7 @@ el.shop.addEventListener('pointerdown', e => {
     if (p.buy() === false) return;
     save.coins -= price;
     save.shopBought[p.id] = (save.shopBought[p.id] || 0) + 1;
-    if (p.id !== 'crate') toast(`Bought ${p.name}`, '#7dff9a');
+    if (!p.quiet) toast(`Bought ${p.name}`, '#7dff9a');
     sfx.chime();
   } else if ('upgrade' in btn.dataset) {
     const u = UPGRADES.find(x => x.id === btn.dataset.upgrade);
@@ -3251,6 +3320,59 @@ function checkBackupTip() {
 }
 
 // Settings: open to everyone from the start
+// ---------- Stats page ----------
+function playTimeText(s) {
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return h ? `${fmt(h)}h ${m}m` : `${m}m`;
+}
+
+function renderStatsPage() {
+  const biggest = Object.entries(save.biggest).sort((a, b) => b[1] - a[1])[0];
+  const sections = [
+    ['🎲 Playing', [
+      ['Time played', playTimeText(save.playTime || 0)],
+      ['Rolls', fmt(save.rolls)],
+      ['Food eaten', fmt(save.totalEaten)],
+      ['Meals cooked', fmt(totalCooked())],
+      ['Pot Mush made', fmt(save.mushMade)],
+      ['Daily challenges done', fmt(save.dailiesDone || 0)],
+      ['Daily streak', `${fmt(save.dailyStreak || 0)} days`],
+    ]],
+    ['🔍 Finds', [
+      ['Best find', save.best ? `${emojiHtml(save.best)} ${nameOf(save.best)}<div class="best-odds">${oddsText(save.best)}</div>` : '-'],
+      ['Foods found', `${NORMAL_FOODS.filter(f => save.found[f.id]).length} / ${NORMAL_FOODS.length}`],
+      ['Mutations found', `${REGULAR_MUTS.filter(m => save.mutCount[m.id]).length} / ${REGULAR_MUTS.length}`],
+      ['Double mutations rolled', fmt(save.doubles || 0)],
+      ['Secrets found', `${SECRETS.filter(f => save.found[f.id]).length} / ${SECRETS.length}`],
+      ['Biggest food', biggest ? `${emojiHtml(biggest[0])} ${FOOD[biggest[0]].name} ${biggest[1].toFixed(2)}x` : '-'],
+      ['Smallest size', save.smallest < 1 ? `${save.smallest.toFixed(2)}x` : '-'],
+    ]],
+    ['🪙 Coins', [
+      ['Coins now', fmt(save.coins)],
+      ['Coins from selling', fmt(save.coinsEarned)],
+      ['Food sold', fmt(save.itemsSold)],
+      ['Recipe scraps bought', fmt(save.scrapsBought)],
+      ['Mystery Boxes opened', fmt(save.boxesOpened)],
+    ]],
+  ];
+  // Rolls per tier as bars. Only counted since this page was added, so older saves start at 0.
+  const tiers = TIER_ORDER.filter(t => !['secret', 'meal'].includes(t));
+  const most = Math.max(1, ...tiers.map(t => save.tierRolls[t] || 0));
+  const bars = tiers.map(t => {
+    const n = save.tierRolls[t] || 0;
+    return `<div class="tier-bar" style="--c:${TIERS[t].color}">
+      <span class="tb-name">${TIERS[t].label}</span>
+      <span class="tb-track"><span class="tb-fill" style="width:${n ? Math.max(1, n / most * 100) : 0}%"></span></span>
+      <span class="tb-count">${fmt(n)}</span>
+    </div>`;
+  }).join('');
+  $('statsPage').innerHTML = sections.map(([title, rows]) =>
+    `<h3 class="r-head">${title}</h3><dl class="stats">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`).join('') +
+    `<h3 class="r-head">📊 Rolls by tier</h3>${bars}<p class="setting-note">Counted since v1.1, so rolls from before then aren't in the bars.</p>`;
+}
+$('statsBtn').addEventListener('click', () => { renderStatsPage(); $('statsModal').classList.add('show'); });
+$('statsClose').addEventListener('click', () => $('statsModal').classList.remove('show'));
+
 $('settingsBtn').addEventListener('click', () => $('settingsModal').classList.add('show'));
 $('settingsClose').addEventListener('click', () => $('settingsModal').classList.remove('show'));
 $('cutsceneOdds').value = String(save.settings.cutsceneOdds);
