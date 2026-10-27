@@ -310,6 +310,8 @@ main {
 .mg-snow { position: relative; height: 280px; overflow: hidden; border-radius: 14px; background: linear-gradient(#0f2a44, #1d4f7a); touch-action: none; }
 .mg-flake { position: absolute; top: -44px; background: none; font-size: 30px; padding: 4px; animation: flake-fall linear forwards; }
 @keyframes flake-fall { to { translate: 0 340px; rotate: 180deg; } }
+/* A cutscene is covering the minigame: everything in it holds still */
+.mg-area.paused * { animation-play-state: paused !important; }
 @media (prefers-reduced-motion: reduce) { .bat, .snow { display: none; } }
 /* ---------- Tabs ---------- */
 .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
