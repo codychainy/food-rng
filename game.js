@@ -385,6 +385,8 @@ const MEALS = [
     clue: 'Little folded parcels, steamed. Cool green slices on the side.' },
   { id: 'riceball', name: 'Lucky Rice Ball', emoji: '🍙', needs: { bento: 1, fortune: 1, rice: 2 }, floor: { tier: 'rare', rolls: 5 },
     clue: 'A packed lunch box, a cookie with a message inside, a little plain grain.' },
+  { id: 'doubleburger', name: 'Double Cheeseburger', emoji: '🍔', needs: { bread: 2, cheese: 2, tomato: 1, lettuce: 1, steak: 1  }, luck: 1, time: 240, luckyRolls: 5,
+    clue: '2 grainy slabs, a few slices of fromage, a red bulb, a bundle of green, and a meaty block.' },
 
   // Secret recipes: their scrap only turns up once unlock() is true. An ingredient like 'pizza:golden' needs that exact mutation.
   // forceMut = the next N rolls get that mutation, surprise = a random meal's power.
@@ -2141,7 +2143,8 @@ function renderBuffs() {
   });
   el.charges.innerHTML = items.join('') || (save.buffs.length ? '' : '<li class="empty">Eat food to get buffs!</li>');
 
-  // Food buffs live in a dropdown with a one-line summary, strongest first.
+  // Food buffs live in a dropdown with a one-line summary, rarest tier first (secrets, then meals, then Eternal
+  // down to Common), and inside a tier the rarest 1 in X first.
   // Each shows what it actually adds right now (the 2nd strongest counts half, and so on).
   el.buffBox.hidden = !save.buffs.length;
   if (!save.buffs.length) return;
@@ -2149,7 +2152,8 @@ function renderBuffs() {
   const speed = new Map(rankedBuffs('speed').map(x => [x.key, x.counted]));
   const shown = (full, counted) => counted < full - 0.005 ? `${pct(full)} (counts ${pct(counted)})` : pct(full);
   el.buffSummary.innerHTML = `${save.buffs.length} buff${save.buffs.length > 1 ? 's' : ''} · <b>${pct(buffTotal('luck'))}</b> luck · <b>${pct(buffTotal('speed'))}</b> speed`;
-  const sorted = [...save.buffs].sort((a, b) => (luck.get(b.key) || 0) - (luck.get(a.key) || 0) || (speed.get(b.key) || 0) - (speed.get(a.key) || 0));
+  const tierRank = key => ({ secret: 99, meal: 98 })[parseKey(key).food.tier] ?? TIER_ORDER.indexOf(parseKey(key).food.tier);
+  const sorted = [...save.buffs].sort((a, b) => tierRank(b.key) - tierRank(a.key) || rarity(b.key) - rarity(a.key));
   el.buffs.innerHTML = sorted.map(b => {
     const { food, mut } = parseKey(b.key);
     const e = effectOf(b.key);
@@ -2804,7 +2808,7 @@ function renderInventory() {
       <span class="r-emoji">${emojiHtml(key)}</span>
       <span class="r-info">
         <div class="r-name ${nameClass(food)}">${mut ? tagHtml(mut) + ' ' : ''}${food.name} <span class="r-count">x${save.inv[key]}</span></div>
-        <div class="r-sub">${effectText(key)}${sizeOf(key) !== 1 ? ` · ${sizeOf(key).toFixed(2)}x size` : ''} ${active ? '<span class="active-tag">· active</span>' : ''}</div>
+        <div class="r-sub">${oddsText(key)} · ${effectText(key)}${sizeOf(key) !== 1 ? ` · ${sizeOf(key).toFixed(2)}x size` : ''} ${active ? '<span class="active-tag">· active</span>' : ''}</div>
       </span>
       <button data-fav="${key}" class="pick fav ${save.favs[key] ? 'on' : ''}" title="${save.favs[key] ? 'Unfavorite' : 'Favorite: never sold, auto eaten or auto deleted'}">⭐</button>
       <button data-pick="${key}" class="pick ${picked ? 'on' : ''}" title="${picked ? 'Unpick' : 'Pick for auto eat (Picked foods mode)'}">🍴</button>
