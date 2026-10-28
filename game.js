@@ -691,9 +691,18 @@ save.charges.muts = save.charges.muts.filter(c => MUT[c.id] && c.rolls > 0);
 
 // ---------- Rebirth ----------
 // Give up your food and coins for a luck and speed bonus that lasts forever.
-// The first rebirth needs these; every rebirth after it needs more (see rebirthNeeds).
-const REBIRTH_COINS = 100000;                      // doubles every rebirth
-const REBIRTH_FOODS = { phoenix: 3, ambrosia: 1 }; // food id: how many (any mutation counts). 2nd rebirth needs 2x, 3rd 3x...
+// What each rebirth needs, one line per rebirth: coins, then food id: how many (any mutation counts).
+// Every line asks for different, rarer food than the one before. After the list runs out, see rebirthNeeds.
+const REBIRTH_NEEDS = [
+  { coins: 100000,  foods: { phoenix: 3, ambrosia: 1 } },                     // 1: mythic + divine
+  { coins: 200000,  foods: { cosmicburger: 3, galaxy: 2, sunrise: 1 } },
+  { coins: 350000,  foods: { timetaco: 4, ghostpepper: 2, angelcake: 1 } },
+  { coins: 600000,  foods: { robotramen: 3, ambrosia: 2, sunsoup: 1 } },
+  { coins: 1000000, foods: { alienjelly: 3, starlight: 2, infinity: 1 } },
+  { coins: 1600000, foods: { crystalapple: 3, harvest: 2, celebration: 1 } },
+  { coins: 2500000, foods: { tornado: 4, bigbang: 2, quantum: 1 } },          // 7: the first eternal
+  { coins: 4000000, foods: { dizzy: 3, lastcrumb: 2, milkyway: 1 } },
+];
 const REBIRTH_LUCK = 0.25;                         // +25% luck for every rebirth
 const REBIRTH_SPEED = 0.1;                         // +10% roll speed for every rebirth
 // Saves from before rebirth count everything so far as their first run
@@ -702,11 +711,25 @@ if (!('runBest' in save)) save.runBest = save.best;
 
 function rebirthLuck() { return 1 + REBIRTH_LUCK * save.rebirths; }
 function rebirthSpeed() { return 1 + REBIRTH_SPEED * save.rebirths; }
+// Past the end of REBIRTH_NEEDS the game picks one mythic, one divine and one eternal food itself.
+// The picks are random but always the same for the same rebirth (so they don't change when you reload),
+// and every rebirth needs 1.5x the coins and slowly more of each food.
 function rebirthNeeds() {
-  const times = save.rebirths + 1; // 1 for the first rebirth, 2 for the second...
+  const fixed = REBIRTH_NEEDS[save.rebirths];
+  if (fixed) return { coins: fixed.coins, foods: Object.entries(fixed.foods) };
+  const extra = save.rebirths - REBIRTH_NEEDS.length + 1; // 1 for the first rebirth past the list
+  const rng = dateRng('rebirth' + save.rebirths);
+  const pick = (tier, maxOdds) => {
+    const pool = NORMAL_FOODS.filter(f => f.tier === tier && f.chance <= maxOdds);
+    return pool[Math.floor(rng() * pool.length)].id;
+  };
   return {
-    coins: REBIRTH_COINS * 2 ** save.rebirths,
-    foods: Object.entries(REBIRTH_FOODS).map(([id, n]) => [id, n * times]),
+    coins: Math.round(REBIRTH_NEEDS[REBIRTH_NEEDS.length - 1].coins * 1.5 ** extra),
+    foods: [
+      [pick('mythic', Infinity), 4 + Math.floor(extra / 2)],
+      [pick('divine', Infinity), 2 + Math.floor(extra / 3)],
+      [pick('eternal', 50000000), 1 + Math.floor(extra / 4)], // the five eternals up to 1 in 50 million
+    ],
   };
 }
 function canRebirth() {
