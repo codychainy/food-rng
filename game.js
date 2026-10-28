@@ -2626,12 +2626,22 @@ function openCrate() {
 
 // Mystery Box prizes. weight = how often a prize comes up: a prize with weight 20 shows up
 // twice as often as one with weight 10. To add a prize, copy a line and change it.
+// If give() returns some text, the box shows that text instead of the prize's name.
+const COINS_BACK = '🪙 750 coins back';
 const MYSTERY_PRIZES = [
   { icon: '🪙', name: '500 coins', weight: 30, give: () => { save.coins += 500; } },
   { icon: '🍀', name: '10 Lucky Rolls', weight: 15, give: () => { save.charges.lucky += 10; } },
   { icon: '🔷', name: '3 random Rare foods', weight: 20, give: () => giveRandomFood('rare', 3) },
-  { icon: '🎁', name: 'Box of Surprises', weight: 0.5, give: () => save.triggers.boxsecret ? (save.coins += 750) : unlockSecret('boxsecret') },
-  { icon: '📜', name: 'A recipe scrap', weight: 12, give: () => findScrap() || (save.coins += 750) }, // all scraps found: coins back
+  { icon: '🎁', name: 'Box of Surprises', weight: 0.5, give: () => {
+    if (!save.triggers.boxsecret) return unlockSecret('boxsecret');
+    save.coins += 750; // already found: coins back
+    return COINS_BACK;
+  } },
+  { icon: '📜', name: 'A recipe scrap', weight: 12, give: () => {
+    if (findScrap()) return;
+    save.coins += 750; // all scraps found: coins back
+    return COINS_BACK;
+  } },
   { icon: '🧂', name: '5 Golden rolls', weight: 10, give: () => addMutCharge('golden', 5) },
   { icon: '🟣', name: 'A random Epic food', weight: 8, give: () => giveRandomFood('epic', 1) },
   { icon: '💰', name: '2,000 coins', weight: 4, give: () => { save.coins += 2000; } },
@@ -2648,9 +2658,9 @@ function giveRandomFood(tier, n) {
 function openMysteryBox() {
   let r = Math.random() * MYSTERY_PRIZES.reduce((sum, p) => sum + p.weight, 0);
   const prize = MYSTERY_PRIZES.find(p => (r -= p.weight) <= 0) || MYSTERY_PRIZES[0];
-  prize.give();
+  const text = prize.give();
   save.boxesOpened++;
-  $('boxPrize').textContent = `${prize.icon} ${prize.name}`;
+  $('boxPrize').textContent = text || `${prize.icon} ${prize.name}`;
   $('boxModal').classList.add('show');
   renderAll();
 }
