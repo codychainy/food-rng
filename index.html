@@ -285,7 +285,13 @@
   <div id="statsModal" class="modal">
     <div class="modal-box help-box">
       <h2>📊 Stats</h2>
-      <div id="statsPage"></div>
+      <!-- Its own class, not .tabs, so the main tab buttons don't pick these up -->
+      <div class="stats-tabs">
+        <button type="button" data-page="statsPage" class="active">📊 Stats</button>
+        <button type="button" data-page="legacyPage">🏆 Legacy</button>
+      </div>
+      <div id="statsPage" class="stats-page"></div>
+      <div id="legacyPage" class="stats-page" hidden></div>
       <div class="modal-buttons"><button type="button" id="statsClose" class="primary">Close</button></div>
     </div>
   </div>

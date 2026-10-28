@@ -675,7 +675,7 @@ const save = Object.assign({
   rolls: 0, inv: {}, found: {}, mutCount: {}, buffs: [], perm: 0, codes: [], breadEaten: 0, totalEaten: 0,
   best: null, triggers: {}, streak: { id: null, count: 0 }, settings: {},
   charges: { lucky: 0, floor: null, muts: [] }, cooked: {}, recipesUnlocked: {}, cookFails: 0, picked: {}, glazedDonuts: 0, pot: {}, clues: {}, treasure: 0, coins: 0, coinsEarned: 0, scrapsBought: 0, favs: {}, sizes: {}, biggest: {}, smallest: 1, itemsSold: 0, mushMade: 0, mushStreak: 0, hunts: {}, huntRoots: 0, shopBought: {}, upgrades: {}, themes: { classic: true },
-  tierRolls: {}, boxesOpened: 0,
+  tierRolls: {}, boxesOpened: 0, rebirths: 0, legacy: [], maxLuck: 1, maxCoins: 0,
 }, load());
 save.settings = Object.assign({ autoEat: 'off', sound: true, music: true, deleteBelow: 0, luckCap: 0, theme: 'classic', cutsceneOdds: CUTSCENE_ODDS }, save.settings);
 // The default used to be 1 in 1,000,000. Saves still on that move to the new default once.
@@ -688,6 +688,31 @@ save.upgrades = Object.assign({ eye: 0, pot: 0 }, save.upgrades);
 if (!save.charges.muts) save.charges.muts = save.charges.mut ? [save.charges.mut] : [];
 delete save.charges.mut;
 save.charges.muts = save.charges.muts.filter(c => MUT[c.id] && c.rolls > 0);
+
+// ---------- Rebirth ----------
+// Give up your food and coins for a luck and speed bonus that lasts forever.
+// The first rebirth needs these; every rebirth after it needs more (see rebirthNeeds).
+const REBIRTH_COINS = 100000;                      // doubles every rebirth
+const REBIRTH_FOODS = { phoenix: 3, ambrosia: 1 }; // food id: how many (any mutation counts). 2nd rebirth needs 2x, 3rd 3x...
+const REBIRTH_LUCK = 0.25;                         // +25% luck for every rebirth
+const REBIRTH_SPEED = 0.1;                         // +10% roll speed for every rebirth
+// Saves from before rebirth count everything so far as their first run
+if (!save.runStart) save.runStart = { rolls: 0, eaten: 0, playTime: 0, coinsEarned: 0 };
+if (!('runBest' in save)) save.runBest = save.best;
+
+function rebirthLuck() { return 1 + REBIRTH_LUCK * save.rebirths; }
+function rebirthSpeed() { return 1 + REBIRTH_SPEED * save.rebirths; }
+function rebirthNeeds() {
+  const times = save.rebirths + 1; // 1 for the first rebirth, 2 for the second...
+  return {
+    coins: REBIRTH_COINS * 2 ** save.rebirths,
+    foods: Object.entries(REBIRTH_FOODS).map(([id, n]) => [id, n * times]),
+  };
+}
+function canRebirth() {
+  const need = rebirthNeeds();
+  return save.coins >= need.coins && need.foods.every(([id, n]) => countOf(id) >= n);
+}
 
 function load() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) { return {}; }
@@ -1079,7 +1104,7 @@ function rankedBuffs(stat) {
 const buffTotal = stat => rankedBuffs(stat).reduce((s, x) => s + x.counted, 0);
 
 function luckNow() {
-  return 1 + save.perm + buffTotal('luck');
+  return (1 + save.perm + buffTotal('luck')) * rebirthLuck();
 }
 
 // The luck a roll actually uses: lucky rolls double it, then the player's luck limit caps it
@@ -1089,7 +1114,7 @@ function rollLuck(lucky) {
 }
 
 function rollTime() {
-  return Math.max(0.15, BASE_ROLL_TIME / (1 + buffTotal('speed')));
+  return Math.max(0.15, BASE_ROLL_TIME / ((1 + buffTotal('speed')) * rebirthSpeed()));
 }
 
 function mutBoostNow() {
@@ -1184,6 +1209,7 @@ async function roll(auto = false) {
   }
   const copies = doubleNow() ? 2 : 1;
   const luck = rollLuck(lucky);
+  save.maxLuck = Math.max(save.maxLuck, luck); // for the Legacy page
   const food = save.rolls === 777 ? FOOD.clover : pickFood(luck, minChance);
   let mut = forcedMut || pickMutation(luck);
   // Rarely a second mutation lands on top (see DOUBLE_GATE). Forced mutations don't get a random extra one.
@@ -1280,6 +1306,7 @@ function give(key, amount = 1, size = 1) {
     if (mut.parts) save.doubles = (save.doubles || 0) + amount;
   }
   if (countsAsBest(key) && (!save.best || rarity(key) > rarity(save.best))) save.best = key;
+  if (countsAsBest(key) && (!save.runBest || rarity(key) > rarity(save.runBest))) save.runBest = key; // best since the last rebirth
   persist();
 }
 
@@ -1978,9 +2005,10 @@ async function playCutscene(sc, key) {
   duckMusic(true);
   csSkipped = false;
   csRevealing = false;
-  const { food, mut } = parseKey(key);
+  // Some cutscenes (like rebirth) aren't about a food: they bring their own counter text, particles and reveal
+  const food = sc.reveal ? null : parseKey(key).food;
   const cs = el.cutscene;
-  const power = csPower(key);
+  const power = sc.power || csPower(key);
 
   cs.className = 'cutscene show' + (sc.glitch ? ' glitch' : '') + (sc.flip ? ' flip' : '');
   cs.style.background = sc.bg;
@@ -1999,7 +2027,12 @@ async function playCutscene(sc, key) {
   sfx.droneStart();
 
   // 1. The odds tick up (rarer rolls take a bit longer)
-  if (food.tier === 'secret') {
+  if (sc.counter) {
+    el.csCounter.textContent = sc.counter;
+    restartClass(el.csCounter, 'thump');
+    sfx.thump(4);
+    await csWait(1500);
+  } else if (food.tier === 'secret') {
     el.csCounter.textContent = '1 in ???';
     await csWait(900);
   } else {
@@ -2055,14 +2088,14 @@ async function playCutscene(sc, key) {
     setTimeout(() => ring.remove(), 1200 + i * 180);
   }
   el.csParticles.innerHTML = '';
-  addParticles(`img:${food.id} ${sc.p}`, 'burst', 45 + 20 * power);
+  addParticles(food ? `img:${food.id} ${sc.p}` : sc.p, 'burst', 45 + 20 * power);
   sfx.boom(power);
   setTimeout(sfx.chime, 350);
   if (navigator.vibrate) navigator.vibrate([80, 40, 120 * power]);
 
-  el.csEmoji.innerHTML = emojiHtml(key, true);
-  el.csName.textContent = nameOf(key);
-  el.csOdds.textContent = oddsText(key);
+  el.csEmoji.innerHTML = sc.reveal ? sc.reveal.emoji : emojiHtml(key, true);
+  el.csName.textContent = sc.reveal ? sc.reveal.name : nameOf(key);
+  el.csOdds.textContent = sc.reveal ? sc.reveal.sub : oddsText(key);
   el.csReveal.classList.add('show');
 
   await sleep(1000); // so a skip-click doesn't close the reveal straight away
@@ -2097,6 +2130,7 @@ function renderStats() {
     ['Best find', save.best ? `${emojiHtml(save.best)} ${nameOf(save.best)}<div class="best-odds">${oddsText(save.best)}</div>` : '-'],
   ];
   if (save.perm) rows.splice(2, 0, ['Permanent luck', pct(save.perm)]);
+  if (save.rebirths) rows.splice(2, 0, ['Rebirths', `🔁 ${save.rebirths} (x${rebirthLuck().toFixed(2)} luck)`]);
   el.stats.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   renderRollLuck();
 }
@@ -2404,6 +2438,7 @@ const ACHIEVEMENTS = [
   { id: 'scraps10',   icon: '📜', name: 'Archivist',         desc: 'Find 10 recipe scraps',          prog: () => [Object.keys(save.clues).length, 10], coins: 1000 },
   { id: 'mush10',     icon: '🥣', name: 'Acquired Taste',    desc: 'Make Pot Mush 10 times',         prog: () => [save.mushMade, 10], coins: 100 },
   { id: 'fast',       icon: '⚡', name: 'Speedrunner',       desc: 'Get your roll time down to 0.3s', prog: () => [rollTime() <= 0.3 ? 1 : 0, 1], coins: 1000 },
+  { id: 'reborn',     icon: '🔁', name: 'Born Again',        desc: 'Rebirth for the first time',     prog: () => [save.rebirths, 1], coins: 5000 },
 ];
 
 // Saves from before achievements get theirs quietly, so loading doesn't fire 20 pop-ups
@@ -2725,7 +2760,8 @@ function renderShop() {
       const using = save.settings.theme === t.id;
       const btn = using ? '<button class="off">In use</button>' : owned ? `<button data-theme="${t.id}">Use</button>` : priceBtn(`data-theme="${t.id}"`, t.price);
       return shopRow(`<span class="theme-swatch theme-${t.id}"></span>`, t.name, owned ? 'Owned' : 'Changes how your roll card looks', btn);
-    }).join('');
+    }).join('') +
+    `<h3 class="r-head">Rebirth ${save.rebirths ? `(${save.rebirths} so far)` : ''}</h3>` + rebirthHtml();
   renderSellList();
 }
 
@@ -2963,6 +2999,7 @@ function renderSecrets() {
 }
 
 function renderAll() {
+  save.maxCoins = Math.max(save.maxCoins, save.coins); // for the Legacy page
   checkRecipeUnlocks();
   checkAchievements();
   renderStats();
@@ -3106,7 +3143,8 @@ el.shop.addEventListener('pointerdown', e => {
     }
     save.settings.theme = t.id;
     applyTheme();
-  } else return;
+  } else if ('rebirth' in btn.dataset) return rebirth();
+  else return;
   persist();
   renderAll();
 });
@@ -3336,8 +3374,121 @@ function playTimeText(s) {
   return h ? `${fmt(h)}h ${m}m` : `${m}m`;
 }
 
+// A food with its name and odds, or '-' if there isn't one
+const findHtml = key => key && validKey(key) ? `${emojiHtml(key)} ${nameOf(key)}<div class="best-odds">${oddsText(key)}</div>` : '-';
+// Sections of "name: value" rows, each under a heading
+const sectionsHtml = sections => sections.map(([title, rows]) =>
+  `<h3 class="r-head">${title}</h3><dl class="stats">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`).join('');
+const biggestFood = () => Object.entries(save.biggest).sort((a, b) => b[1] - a[1])[0];
+
+// ---------- Rebirth (the numbers are at the top, under Save) ----------
+// The Rebirth box at the bottom of the Shop: what you need, ticked off as you get it
+function rebirthHtml() {
+  const need = rebirthNeeds();
+  const item = (ok, html) => `<li class="${ok ? 'ok' : ''}">${ok ? '✅' : '⬜'} ${html}</li>`;
+  return `<div class="rebirth-box">
+    <p>Start over with no food and no coins, and get <b>${pct(REBIRTH_LUCK)} luck</b> and <b>${pct(REBIRTH_SPEED)} roll speed</b> forever.
+      You keep your secrets, Index, achievements, recipes and permanent luck.</p>
+    <ul class="rebirth-needs">
+      ${item(save.coins >= need.coins, `🪙 ${fmt(Math.min(save.coins, need.coins))} / ${fmt(need.coins)} coins`)}
+      ${need.foods.map(([id, n]) => item(countOf(id) >= n, `${emojiHtml(id)} ${FOOD[id].name} ${fmt(Math.min(countOf(id), n))} / ${fmt(n)}`)).join('')}
+    </ul>
+    <p>Tip: ⭐ favorite the food you need, so auto eat and auto delete leave it alone. Any mutation counts.</p>
+    <button data-rebirth class="rebirth-btn ${canRebirth() ? '' : 'off'}">🔁 Rebirth ${save.rebirths + 1}</button>
+  </div>`;
+}
+
+function rebirth() {
+  if (cutscenePlaying) return;
+  if (!canRebirth()) return toast('You don\'t have everything you need to rebirth yet.', '#ff8080');
+  const next = save.rebirths + 1;
+  if (!confirm(`Rebirth ${next}?\n\nYou LOSE all your food (favorites too), coins, buffs and power-ups.\n` +
+    `You KEEP your secrets, Index, achievements, recipes and permanent luck.\n\n` +
+    `You get ${pct(REBIRTH_LUCK)} luck and ${pct(REBIRTH_SPEED)} roll speed forever.`)) return;
+
+  // Remember how this run went, for the Legacy page
+  const start = save.runStart;
+  save.legacy.push({
+    n: next,
+    day: dayStr(),
+    time: (save.playTime || 0) - start.playTime,
+    rolls: save.rolls - start.rolls,
+    eaten: save.totalEaten - start.eaten,
+    coins: save.coinsEarned - start.coinsEarned,
+    best: save.runBest,
+  });
+  save.rebirths = next;
+
+  // Secrets stay in the inventory, every other food goes (the ⭐ marks stay, so the next ones you roll are safe too)
+  for (const k of Object.keys(save.inv)) {
+    if (parseKey(k).food.tier === 'secret') continue;
+    delete save.inv[k];
+    delete save.sizes[k];
+  }
+  save.pot = {};
+  save.buffs = [];
+  save.coins = 0;
+  save.charges = { lucky: 0, floor: null, muts: [] };
+  save.shopBought = {}; // power-ups go back to their first price
+  save.runStart = { rolls: save.rolls, eaten: save.totalEaten, playTime: save.playTime || 0, coinsEarned: save.coinsEarned };
+  save.runBest = null;
+  persist();
+  renderAll(); // also hands out the Born Again achievement
+
+  queueCutscene({
+    bg: 'radial-gradient(circle at 50% 60%, #7dff9a, #1d6b3a 40%, #021a0c 80%)', color: '#b9ffcb',
+    fx: 'rays', p: '🌱 ✨ 🍉 🔁', motion: 'rise', power: 3,
+    counter: `🔁 Rebirth ${next}`,
+    reveal: { emoji: '🌱', name: `Rebirth ${next}`, sub: `x${rebirthLuck().toFixed(2)} luck · x${rebirthSpeed().toFixed(2)} roll speed, forever` },
+  }).then(renderAll);
+}
+
+// ---------- Legacy page (second tab of the Stats window) ----------
+function renderLegacyPage() {
+  const runs = save.legacy;
+  const fastest = runs.length ? runs.reduce((a, b) => b.time < a.time ? b : a) : null;
+  const biggest = biggestFood();
+  const start = save.runStart;
+  const sections = [
+    ['🔁 Rebirths', [
+      ['Rebirths', fmt(save.rebirths)],
+      ['Luck bonus', `x${rebirthLuck().toFixed(2)}`],
+      ['Roll speed bonus', `x${rebirthSpeed().toFixed(2)}`],
+      ['Fastest rebirth', fastest ? `${playTimeText(fastest.time)} (Rebirth ${fastest.n})` : '-'],
+    ]],
+    ['🏅 All-time bests', [
+      ['Best find ever', findHtml(save.best)],
+      ['Highest luck', `x${Math.max(save.maxLuck, luckNow()).toFixed(2)}`],
+      ['Most coins at once', `🪙 ${fmt(save.maxCoins)}`],
+      ['Biggest food', biggest ? `${emojiHtml(biggest[0])} ${FOOD[biggest[0]].name} ${biggest[1].toFixed(2)}x` : '-'],
+      ['Total rolls', fmt(save.rolls)],
+      ['Total time played', playTimeText(save.playTime || 0)],
+    ]],
+    [`🌱 This run (since ${save.rebirths ? `Rebirth ${save.rebirths}` : 'you started'})`, [
+      ['Time', playTimeText((save.playTime || 0) - start.playTime)],
+      ['Rolls', fmt(save.rolls - start.rolls)],
+      ['Food eaten', fmt(save.totalEaten - start.eaten)],
+      ['Coins from selling', fmt(save.coinsEarned - start.coinsEarned)],
+      ['Best find', findHtml(save.runBest)],
+    ]],
+  ];
+  // Every past rebirth, newest first
+  const history = runs.length ? runs.slice().reverse().map(r => `<div class="legacy-run">
+      <div class="lr-head"><b>🔁 Rebirth ${r.n}</b><span>${r.day}</span></div>
+      <dl class="stats">
+        <dt>Time</dt><dd>${playTimeText(r.time)}</dd>
+        <dt>Rolls</dt><dd>${fmt(r.rolls)}</dd>
+        <dt>Food eaten</dt><dd>${fmt(r.eaten)}</dd>
+        <dt>Coins from selling</dt><dd>${fmt(r.coins)}</dd>
+        <dt>Best find</dt><dd>${findHtml(r.best)}</dd>
+      </dl>
+    </div>`).join('')
+    : '<p class="empty">No rebirths yet. Get everything in the Rebirth box at the bottom of the Shop, and every run will be listed here.</p>';
+  $('legacyPage').innerHTML = sectionsHtml(sections) + '<h3 class="r-head">📜 Every rebirth</h3>' + history;
+}
+
 function renderStatsPage() {
-  const biggest = Object.entries(save.biggest).sort((a, b) => b[1] - a[1])[0];
+  const biggest = biggestFood();
   const sections = [
     ['🎲 Playing', [
       ['Time played', playTimeText(save.playTime || 0)],
@@ -3376,11 +3527,15 @@ function renderStatsPage() {
       <span class="tb-count">${fmt(n)}</span>
     </div>`;
   }).join('');
-  $('statsPage').innerHTML = sections.map(([title, rows]) =>
-    `<h3 class="r-head">${title}</h3><dl class="stats">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`).join('') +
+  $('statsPage').innerHTML = sectionsHtml(sections) +
     `<h3 class="r-head">📊 Rolls by tier</h3>${bars}<p class="setting-note">Counted since v1.1, so rolls from before then aren't in the bars.</p>`;
 }
-$('statsBtn').addEventListener('click', () => { renderStatsPage(); $('statsModal').classList.add('show'); });
+$('statsBtn').addEventListener('click', () => { renderStatsPage(); renderLegacyPage(); $('statsModal').classList.add('show'); });
+// Stats / Legacy tabs: show the page whose id is on the button
+document.querySelectorAll('.stats-tabs button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('.stats-tabs button').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.stats-page').forEach(p => { p.hidden = p.id !== btn.dataset.page; });
+}));
 $('statsClose').addEventListener('click', () => $('statsModal').classList.remove('show'));
 
 $('settingsBtn').addEventListener('click', () => $('settingsModal').classList.add('show'));
