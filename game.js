@@ -3355,6 +3355,16 @@ if (TEST_CUTSCENE && FOOD[TEST_CUTSCENE.split(':')[0]]) {
     queueCutscene(SCENES[food.id] || (mut && SCENES['mut:' + mut.id]) || genericScene(TEST_CUTSCENE), TEST_CUTSCENE);
   }, { once: true });
 }
+// Opening the game from your own computer with ?rebirth=ready tops up your coins and food so the next
+// rebirth is ready, for testing. It changes the save, so use a test profile.
+if (location.protocol === 'file:' && new URLSearchParams(location.search).get('rebirth') === 'ready') {
+  const need = rebirthNeeds();
+  save.coins = Math.max(save.coins, need.coins);
+  for (const [id, n] of need.foods) if (countOf(id) < n) save.inv[id] = (save.inv[id] || 0) + n - countOf(id);
+  persist();
+  renderAll();
+  toast(`Test: rebirth ${save.rebirths + 1} is ready (Shop, at the bottom)`, '#7dff9a');
+}
 $('unlockTry').addEventListener('click', () => {
   el.autoRoll.checked = true;
   $('unlockModal').classList.remove('show');
