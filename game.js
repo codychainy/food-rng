@@ -20,7 +20,7 @@ const TIER_ORDER = Object.keys(TIERS);
 // Event foods only roll during the event, but anything you got stays yours. Event stuff
 // never counts toward the "find every..." achievements, so missing an event doesn't lock you out.
 const EVENTS = {
-  halloween: { icon: '🎃', name: 'Halloween', from: [9, 24], to: [10, 2], banner: 'Halloween event until Nov 2: spooky foods are in the roll' },
+  halloween: { icon: '🎃', name: 'Halloween', from: [9, 24], to: [10, 5], banner: 'Halloween event until Nov 5: spooky foods are in the roll' },
 };
 // Opening the game from your own computer with ?event=halloween turns an event on outside its dates, for testing
 const TEST_EVENT = location.protocol === 'file:' ? new URLSearchParams(location.search).get('event') : null;
